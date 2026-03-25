@@ -19,8 +19,10 @@ export function createPresetBar(state) {
   const container = document.createElement('div');
   container.className = 'preset-bar';
 
-  // Hide for non-CT modalities (WLVL-04)
-  if (state.modality !== 'CT') {
+  // Hide only for known non-CT modalities (WLVL-04)
+  // NIfTI files lack modality info and report "unknown", so show presets
+  // for both CT and unknown — the presets are harmless on non-CT data
+  if (state.modality !== 'CT' && state.modality !== 'unknown') {
     container.style.display = 'none';
   }
 
