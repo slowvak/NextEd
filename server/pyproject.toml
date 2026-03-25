@@ -1,0 +1,20 @@
+[project]
+name = "nexted-server"
+version = "0.1.0"
+description = "NextEd medical image server"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydicom>=2.4",
+    "nibabel>=5.2",
+    "numpy>=1.26",
+    "scipy>=1.12",
+    "scikit-image>=0.22",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
