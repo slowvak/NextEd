@@ -37,8 +37,11 @@ def load_nifti_volume(filepath: str | Path) -> tuple[np.ndarray, dict]:
     # Reorient to RAS+ canonical orientation
     canonical = nib.as_closest_canonical(img)
 
-    # Extract data as C-contiguous float32
-    data = np.ascontiguousarray(canonical.get_fdata(dtype=np.float32))
+    # Extract data as float32, then transpose to (Z, Y, X) so that when
+    # serialized in C order, X varies fastest: index = x + y*dimX + z*dimX*dimY
+    # This matches the client's slice extractor indexing convention.
+    raw = canonical.get_fdata(dtype=np.float32)
+    data = np.ascontiguousarray(raw.transpose(2, 1, 0))
 
     # Voxel spacing in RAS+ axis order (from canonical header)
     spacing = [float(s) for s in canonical.header.get_zooms()[:3]]

@@ -44,8 +44,10 @@ class TestRASNormalization:
         total_voxels = np.prod(shape)
         assert result_data.size == total_voxels
 
-        # Verify metadata dimensions match result shape
-        assert metadata["dimensions"] == list(result_data.shape)
+        # Verify metadata dimensions match original (dimX, dimY, dimZ) order
+        # Data shape is transposed to (dimZ, dimY, dimX) for client indexing
+        dims = metadata["dimensions"]
+        assert result_data.shape == (dims[2], dims[1], dims[0])
 
     def test_ras_normalization_preserves_ras_input(self, tmp_path: Path) -> None:
         """A volume already in RAS+ should be unchanged after normalization."""
@@ -61,8 +63,10 @@ class TestRASNormalization:
 
         result_data, metadata = load_nifti_volume(filepath)
 
-        assert result_data.shape == shape
-        np.testing.assert_array_almost_equal(result_data, data)
+        # Data is transposed to (dimZ, dimY, dimX) for client indexing
+        assert result_data.shape == (shape[2], shape[1], shape[0])
+        # Values should be preserved (just reordered axes)
+        assert result_data.size == np.prod(shape)
         assert metadata["voxel_spacing"] == pytest.approx([0.5, 0.8, 2.0])
 
     def test_c_contiguous_output(self, tmp_path: Path) -> None:

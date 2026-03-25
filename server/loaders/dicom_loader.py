@@ -119,8 +119,10 @@ def load_dicom_volume(folder: str | Path) -> tuple[np.ndarray, dict]:
     nii_img = nib.Nifti1Image(volume_3d, affine)
     canonical = nib.as_closest_canonical(nii_img)
 
-    # Extract normalized data
-    data = np.ascontiguousarray(canonical.get_fdata(dtype=np.float32))
+    # Extract data, transpose to (Z, Y, X) so X varies fastest in C order
+    # Matches client indexing: index = x + y*dimX + z*dimX*dimY
+    raw = canonical.get_fdata(dtype=np.float32)
+    data = np.ascontiguousarray(raw.transpose(2, 1, 0))
 
     # Voxel spacing in RAS+ axis order
     spacing = [float(s) for s in canonical.header.get_zooms()[:3]]
