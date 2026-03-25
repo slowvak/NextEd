@@ -54,12 +54,14 @@ export function canvasToVoxel(canvasX, canvasY, axis, canvasH, canvasV, dims) {
     cursorUpdates[1] = Math.max(0, Math.min(voxelY, dims[1] - 1));
   } else if (axis === 'coronal') {
     // Coronal: canvasX -> cursor[0] (x), canvasY -> cursor[2] (z)
+    // Z is flipped in rendering (superior at top), so invert Y
     cursorUpdates[0] = Math.max(0, Math.min(voxelX, dims[0] - 1));
-    cursorUpdates[2] = Math.max(0, Math.min(voxelY, dims[2] - 1));
+    cursorUpdates[2] = Math.max(0, Math.min(dims[2] - 1 - voxelY, dims[2] - 1));
   } else {
     // Sagittal: canvasX -> cursor[1] (y), canvasY -> cursor[2] (z)
+    // Z is flipped in rendering (superior at top), so invert Y
     cursorUpdates[1] = Math.max(0, Math.min(voxelX, dims[1] - 1));
-    cursorUpdates[2] = Math.max(0, Math.min(voxelY, dims[2] - 1));
+    cursorUpdates[2] = Math.max(0, Math.min(dims[2] - 1 - voxelY, dims[2] - 1));
   }
 
   return { cursorUpdates };
@@ -436,10 +438,12 @@ export class ViewerPanel {
       crossY = this.state.cursor[1]; // horizontal line at cursor Y
     } else if (this.axis === 'coronal') {
       crossX = this.state.cursor[0]; // vertical line at cursor X
-      crossY = this.state.cursor[2]; // horizontal line at cursor Z
+      // Z is flipped in rendering (superior at top)
+      crossY = this.dims[2] - 1 - this.state.cursor[2];
     } else {
       crossX = this.state.cursor[1]; // vertical line at cursor Y
-      crossY = this.state.cursor[2]; // horizontal line at cursor Z
+      // Z is flipped in rendering (superior at top)
+      crossY = this.dims[2] - 1 - this.state.cursor[2];
     }
 
     ctx.save();

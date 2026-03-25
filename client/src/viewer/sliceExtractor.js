@@ -35,8 +35,10 @@ export function extractCoronalSlice(volume, y, dimX, dimY, dimZ) {
   const slice = new Float32Array(dimX * dimZ);
   for (let z = 0; z < dimZ; z++) {
     const srcOffset = y * dimX + z * dimX * dimY;
+    // Flip Z so superior (high z) is at the top of the canvas
+    const dstRow = dimZ - 1 - z;
     for (let x = 0; x < dimX; x++) {
-      slice[z * dimX + x] = volume[srcOffset + x];
+      slice[dstRow * dimX + x] = volume[srcOffset + x];
     }
   }
   return slice;
@@ -56,8 +58,10 @@ export function extractCoronalSlice(volume, y, dimX, dimY, dimZ) {
 export function extractSagittalSlice(volume, x, dimX, dimY, dimZ) {
   const slice = new Float32Array(dimY * dimZ);
   for (let z = 0; z < dimZ; z++) {
+    // Flip Z so superior (high z) is at the top of the canvas
+    const dstRow = dimZ - 1 - z;
     for (let y = 0; y < dimY; y++) {
-      slice[z * dimY + y] = volume[x + y * dimX + z * dimX * dimY];
+      slice[dstRow * dimY + y] = volume[x + y * dimX + z * dimX * dimY];
     }
   }
   return slice;

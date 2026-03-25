@@ -37,31 +37,31 @@ describe('extractAxialSlice', () => {
 });
 
 describe('extractCoronalSlice', () => {
-  it('returns Float32Array of length dimX*dimZ with correct values', () => {
+  it('returns Float32Array of length dimX*dimZ with Z flipped (superior at top)', () => {
     const { volume, dimX, dimY, dimZ } = makeTestVolume();
     const y = 1;
     const slice = extractCoronalSlice(volume, y, dimX, dimY, dimZ);
     expect(slice.length).toBe(dimX * dimZ); // 3*5 = 15
-    // Element [z=0, x=0] = volume[0 + 1*3 + 0*12] = volume[3] = 3
-    expect(slice[0]).toBe(3);
-    // Element [z=0, x=1] = volume[1 + 1*3 + 0*12] = volume[4] = 4
-    expect(slice[1]).toBe(4);
-    // Element [z=1, x=0] = volume[0 + 1*3 + 1*12] = volume[15] = 15
-    expect(slice[dimX]).toBe(15);
+    // Row 0 (top) = z=4 (superior): volume[0 + 1*3 + 4*12] = volume[51] = 51
+    expect(slice[0]).toBe(51);
+    // Row 0, x=1: volume[1 + 1*3 + 4*12] = volume[52] = 52
+    expect(slice[1]).toBe(52);
+    // Row dimZ-1 (bottom) = z=0 (inferior): volume[0 + 1*3 + 0*12] = volume[3] = 3
+    expect(slice[(dimZ - 1) * dimX]).toBe(3);
   });
 });
 
 describe('extractSagittalSlice', () => {
-  it('returns Float32Array of length dimY*dimZ with correct values', () => {
+  it('returns Float32Array of length dimY*dimZ with Z flipped (superior at top)', () => {
     const { volume, dimX, dimY, dimZ } = makeTestVolume();
     const x = 1;
     const slice = extractSagittalSlice(volume, x, dimX, dimY, dimZ);
     expect(slice.length).toBe(dimY * dimZ); // 4*5 = 20
-    // Element [z=0, y=0] = volume[1 + 0*3 + 0*12] = volume[1] = 1
-    expect(slice[0]).toBe(1);
-    // Element [z=0, y=1] = volume[1 + 1*3 + 0*12] = volume[4] = 4
-    expect(slice[1]).toBe(4);
-    // Element [z=1, y=0] = volume[1 + 0*3 + 1*12] = volume[13] = 13
-    expect(slice[dimY]).toBe(13);
+    // Row 0 (top) = z=4 (superior): volume[1 + 0*3 + 4*12] = volume[49] = 49
+    expect(slice[0]).toBe(49);
+    // Row 0, y=1: volume[1 + 1*3 + 4*12] = volume[52] = 52
+    expect(slice[1]).toBe(52);
+    // Row dimZ-1 (bottom) = z=0 (inferior): volume[1 + 0*3 + 0*12] = volume[1] = 1
+    expect(slice[(dimZ - 1) * dimY]).toBe(1);
   });
 });

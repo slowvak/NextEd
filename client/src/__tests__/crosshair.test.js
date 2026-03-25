@@ -9,18 +9,18 @@ describe('canvasToVoxel', () => {
     expect(result).toEqual({ cursorUpdates: { 0: 10, 1: 20 } });
   });
 
-  it('coronal panel: maps canvas click to voxel x,z', () => {
+  it('coronal panel: maps canvas click to voxel x,z (Z flipped)', () => {
     // Canvas click at pixel (10, 20) on a canvas width=100, height=150
-    // Coronal: canvasX -> cursor[0], canvasY -> cursor[2]
+    // Coronal: canvasX -> cursor[0], canvasY -> cursor[2] (flipped: z = dimZ-1-canvasY)
     const result = canvasToVoxel(10, 20, 'coronal', { width: 100, clientWidth: 100 }, { height: 150, clientHeight: 150 }, [100, 200, 150]);
-    expect(result).toEqual({ cursorUpdates: { 0: 10, 2: 20 } });
+    expect(result).toEqual({ cursorUpdates: { 0: 10, 2: 129 } }); // 150-1-20 = 129
   });
 
-  it('sagittal panel: maps canvas click to voxel y,z', () => {
+  it('sagittal panel: maps canvas click to voxel y,z (Z flipped)', () => {
     // Canvas click at pixel (10, 20) on a canvas width=200, height=150
-    // Sagittal: canvasX -> cursor[1], canvasY -> cursor[2]
+    // Sagittal: canvasX -> cursor[1], canvasY -> cursor[2] (flipped: z = dimZ-1-canvasY)
     const result = canvasToVoxel(10, 20, 'sagittal', { width: 200, clientWidth: 200 }, { height: 150, clientHeight: 150 }, [100, 200, 150]);
-    expect(result).toEqual({ cursorUpdates: { 1: 10, 2: 20 } });
+    expect(result).toEqual({ cursorUpdates: { 1: 10, 2: 129 } }); // 150-1-20 = 129
   });
 
   it('accounts for CSS scaling (anisotropic)', () => {
