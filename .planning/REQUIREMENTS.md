@@ -29,17 +29,17 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **VIEW-01**: 4-panel layout: axial (upper-left), coronal (upper-right), sagittal (lower-left), blank (lower-right)
 - [ ] **VIEW-02**: Each view starts at the center slice of its dimension (z/2, y/2, x/2)
 - [ ] **VIEW-03**: Each view has a slider for slice navigation
-- [ ] **VIEW-04**: Single-view toggle via A/C/S buttons; + button returns to 4-panel
+- [x] **VIEW-04**: Single-view toggle via A/C/S buttons; + button returns to 4-panel
 - [ ] **VIEW-05**: Full volume held in browser memory; slices rendered client-side from ArrayBuffer
 - [ ] **VIEW-06**: Correct handling of anisotropic voxel spacing in rendering (Z spacing often differs from X/Y)
-- [ ] **VIEW-07**: Crosshair synchronization — clicking in one view updates slice position in other views
+- [x] **VIEW-07**: Crosshair synchronization — clicking in one view updates slice position in other views
 
 ### Window/Level
 
 - [ ] **WLVL-01**: Auto window/level on open using 5th–95th percentile histogram values
-- [ ] **WLVL-02**: Manual W/L via ctrl+drag (up=brighter, down=darker, right=wider, left=narrower)
-- [ ] **WLVL-03**: W/L presets: Brain (0–80), Bone (-1000 to +2000), Lung (-1000 to 0), Abd (-100 to +350)
-- [ ] **WLVL-04**: Presets shown only when modality is CT; hidden for MR
+- [x] **WLVL-02**: Manual W/L via ctrl+drag (up=brighter, down=darker, right=wider, left=narrower)
+- [x] **WLVL-03**: W/L presets: Brain (0–80), Bone (-1000 to +2000), Lung (-1000 to 0), Abd (-100 to +350)
+- [x] **WLVL-04**: Presets shown only when modality is CT; hidden for MR
 
 ### Segmentation Display
 
@@ -137,14 +137,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIEW-01 | Phase 2 | Pending |
 | VIEW-02 | Phase 2 | Pending |
 | VIEW-03 | Phase 2 | Pending |
-| VIEW-04 | Phase 2 | Pending |
+| VIEW-04 | Phase 2 | Complete |
 | VIEW-05 | Phase 2 | Pending |
 | VIEW-06 | Phase 2 | Pending |
-| VIEW-07 | Phase 2 | Pending |
+| VIEW-07 | Phase 2 | Complete |
 | WLVL-01 | Phase 2 | Pending |
-| WLVL-02 | Phase 2 | Pending |
-| WLVL-03 | Phase 2 | Pending |
-| WLVL-04 | Phase 2 | Pending |
+| WLVL-02 | Phase 2 | Complete |
+| WLVL-03 | Phase 2 | Complete |
+| WLVL-04 | Phase 2 | Complete |
 | SEGD-01 | Phase 3 | Pending |
 | SEGD-02 | Phase 3 | Pending |
 | SEGD-03 | Phase 3 | Pending |
