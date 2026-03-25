@@ -46,7 +46,11 @@ Plans:
   3. User can adjust window/level via ctrl+drag and sees auto-windowed image on open (5th-95th percentile)
   4. User sees CT-specific W/L presets (Brain, Bone, Lung, Abd) only when viewing CT data; presets are hidden for MR
   5. User can toggle between 4-panel and single-view mode via A/C/S buttons and return with + button
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 02-01-PLAN.md — Server-side RAS+ normalization, auto-windowing metadata, and voxel spacing
+- [ ] 02-02-PLAN.md — Client viewer core: ViewerState, slice extraction, rendering pipeline, 4-panel layout with sliders
+- [ ] 02-03-PLAN.md — Viewer interactions: crosshairs, W/L drag, presets, single-view toggle, visual verification
 **UI hint**: yes
 
 ### Phase 3: Segmentation Display & Labels
@@ -95,7 +99,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Server & Data Pipeline | 0/3 | Planning complete | - |
-| 2. Core Viewer | 0/TBD | Not started | - |
+| 2. Core Viewer | 0/3 | Planning complete | - |
 | 3. Segmentation Display & Labels | 0/TBD | Not started | - |
 | 4. Editing Tools & Save | 0/TBD | Not started | - |
 | 5. Semi-Automatic Tools & DICOM-SEG | 0/TBD | Not started | - |
