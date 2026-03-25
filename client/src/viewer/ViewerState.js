@@ -1,3 +1,6 @@
+import { discoverLabels, findLowestUnusedValue, reassignLabelValue } from './labelManager.js';
+import { buildColorLUT } from './overlayBlender.js';
+
 /**
  * ViewerState — shared state for the multi-plane medical image viewer.
  * Holds cursor position [x,y,z], window/level, volume metadata, and
@@ -28,6 +31,14 @@ export class ViewerState {
     this.windowWidth = Math.max(1, windowWidth);
     this.activePreset = null;
     this.singleView = null; // 'axial' | 'coronal' | 'sagittal' | null
+
+    // Segmentation state
+    this.segVolume = null;          // Uint8Array — full segmentation volume
+    this.segDims = null;            // [dimX, dimY, dimZ] — must match volume dims
+    this.labels = new Map();        // Map<number, {name, value, color:{r,g,b}}>
+    this.activeLabel = 0;           // Currently selected label value
+    this.overlayOpacity = 0.5;      // 0.0-1.0 (default 50% per D-09)
+    this.colorLUT = null;           // Uint8Array(768) — built from labels
 
     /** @type {Array<function(ViewerState): void>} */
     this.listeners = [];
@@ -71,6 +82,59 @@ export class ViewerState {
     this.windowCenter = center;
     this.windowWidth = Math.max(1, width);
     this.activePreset = name;
+    this.notify();
+  }
+
+  setSegmentation(segVolume, segDims) {
+    if (this.dims[0] !== segDims[0] || this.dims[1] !== segDims[1] || this.dims[2] !== segDims[2]) {
+      throw new Error(`Segmentation dimensions [${segDims}] do not match volume dimensions [${this.dims}]`);
+    }
+    this.segVolume = segVolume;
+    this.segDims = segDims;
+    this.labels = discoverLabels(segVolume);
+    this.colorLUT = buildColorLUT(this.labels);
+    this.activeLabel = 0;
+    this.notify();
+  }
+
+  setOverlayOpacity(opacity) {
+    this.overlayOpacity = Math.max(0, Math.min(1, opacity));
+    this.notify();
+  }
+
+  setActiveLabel(value) {
+    this.activeLabel = value;
+    this.notify();
+  }
+
+  addLabel(name, color) {
+    const value = findLowestUnusedValue(this.labels);
+    if (value === null) return null;
+    this.labels.set(value, { name, value, color });
+    this.colorLUT = buildColorLUT(this.labels);
+    this.notify();
+    return value;
+  }
+
+  updateLabel(oldValue, newProps) {
+    const label = this.labels.get(oldValue);
+    if (!label) return;
+    const newValue = newProps.value !== undefined ? newProps.value : oldValue;
+    if (newValue !== oldValue && this.labels.has(newValue)) {
+      throw new Error(`Label value ${newValue} is already in use`);
+    }
+    const updated = {
+      name: newProps.name !== undefined ? newProps.name : label.name,
+      value: newValue,
+      color: newProps.color !== undefined ? newProps.color : label.color,
+    };
+    if (newValue !== oldValue) {
+      reassignLabelValue(this.segVolume, oldValue, newValue);
+      this.labels.delete(oldValue);
+      if (this.activeLabel === oldValue) this.activeLabel = newValue;
+    }
+    this.labels.set(newValue, updated);
+    this.colorLUT = buildColorLUT(this.labels);
     this.notify();
   }
 

@@ -4,6 +4,8 @@
  */
 import { extractAxialSlice, extractCoronalSlice, extractSagittalSlice } from './sliceExtractor.js';
 import { applyWindowLevel, computeWLDrag } from './windowLevel.js';
+import { extractAxialSegSlice, extractCoronalSegSlice, extractSagittalSegSlice } from './segSliceExtractor.js';
+import { blendSegmentationOverlay } from './overlayBlender.js';
 
 const ORIENTATION_LABELS = {
   axial: { left: 'R', right: 'L', top: 'A', bottom: 'P' },
@@ -415,6 +417,11 @@ export class ViewerPanel {
       this.state.windowWidth
     );
 
+    if (this.state.segVolume && this.state.colorLUT && this.state.overlayOpacity > 0) {
+      const segSlice = this._extractSegSlice(sliceIndex);
+      blendSegmentationOverlay(segSlice, this.imageData.data, this.state.colorLUT, this.state.overlayOpacity);
+    }
+
     // Draw to canvas
     this.ctx.putImageData(this.imageData, 0, 0);
 
@@ -426,6 +433,17 @@ export class ViewerPanel {
     this.sliceReadout.textContent = `${sliceIndex}/${maxSlice}`;
     this.slider.value = String(sliceIndex);
     this.slider.setAttribute('aria-valuenow', String(sliceIndex));
+  }
+
+  _extractSegSlice(sliceIndex) {
+    const [dimX, dimY, dimZ] = this.dims;
+    if (this.axis === 'axial') {
+      return extractAxialSegSlice(this.state.segVolume, sliceIndex, dimX, dimY);
+    } else if (this.axis === 'coronal') {
+      return extractCoronalSegSlice(this.state.segVolume, sliceIndex, dimX, dimY, dimZ);
+    } else {
+      return extractSagittalSegSlice(this.state.segVolume, sliceIndex, dimX, dimY, dimZ);
+    }
   }
 
   /**
