@@ -30,8 +30,27 @@ severity: major
 
 total: 3
 passed: 2
-issues: 0
-pending: 1
+issues: 1
+pending: 0
 skipped: 0
 
 ## Gaps
+
+- truth: "Viewer extracts segmentation slices as Uint8Array, auto-discovers labels, builds a valid ColorLUT, and composites a colored overlay onto the grayscale volume with configurable opacity in all three planes."
+  status: failed
+  reason: "User reported: not clear what 'autodiscovers' means. There probably needs to be a companion JSON or otehr file to store the label name and could be used to store other information of interest such as modality since nifti files don't have modality"
+  severity: major
+  test: 3
+  root_cause: "System lacks support for semantic companion JSON metadata containing label definitions."
+  artifacts:
+    - path: "server/main.py"
+      issue: "Needs to parse companion JSON alongside NIfTI"
+    - path: "server/catalog/models.py"
+      issue: "SegmentationMetadata needs custom label arrays"
+    - path: "client/src/viewer/labelManager.js"
+      issue: "Needs to accept pre-defined labels instead of always auto-generating"
+  missing:
+    - "Discovery logic for *_segmentation.json"
+    - "Parsing and serving metadata to frontend"
+    - "Merging semantic labels with auto-discovered integers"
+  debug_session: .planning/debug/segmentation-companion-json.md
