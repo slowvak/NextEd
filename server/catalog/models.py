@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class VolumeMetadata(BaseModel):
@@ -28,3 +28,4 @@ class SegmentationMetadata(BaseModel):
     path: str
     volume_id: str
     dimensions: list[int] | None = None
+    labels: list[dict] = Field(default_factory=list)

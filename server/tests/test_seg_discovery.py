@@ -2,6 +2,7 @@
 
 import pytest
 from pathlib import Path
+import json
 from server.main import _find_companion_segmentations, _discover_volumes
 
 def test_find_companion_segmentations(tmp_path: Path):
@@ -23,12 +24,27 @@ def test_find_companion_segmentations(tmp_path: Path):
     (d / "brain_mask.nii.gz").touch()
     (d / "brain2_seg.nii.gz").touch()
     
+    # Create companion json for brain_segmentation
+    brain_json = d / "brain_segmentation.json"
+    with open(brain_json, "w") as f:
+        json.dump({"labels": [{"value": 1, "name": "Left Brain", "color": "#ff0000"}]}, f)
+    
     # Find for brain.nii.gz
     found_brain = _find_companion_segmentations(vol_nii_gz)
     assert len(found_brain) == 2
-    names = [p.name for p in found_brain]
+    
+    paths = [p for p, _ in found_brain]
+    names = [p.name for p in paths]
     assert "brain_segmentation.nii.gz" in names
     assert "brain_seg.nii" in names
+    
+    # Check JSON parsed for brain_segmentation
+    for p, labels in found_brain:
+        if p.name == "brain_segmentation.nii.gz":
+            assert len(labels) == 1
+            assert labels[0]["name"] == "Left Brain"
+        else:
+            assert labels == []
     
     # Find for liver.nii
     found_liver = _find_companion_segmentations(vol_nii)

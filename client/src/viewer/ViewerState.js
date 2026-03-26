@@ -85,13 +85,13 @@ export class ViewerState {
     this.notify();
   }
 
-  setSegmentation(segVolume, segDims) {
+  setSegmentation(segVolume, segDims, apiLabels = []) {
     if (this.dims[0] !== segDims[0] || this.dims[1] !== segDims[1] || this.dims[2] !== segDims[2]) {
       throw new Error(`Segmentation dimensions [${segDims}] do not match volume dimensions [${this.dims}]`);
     }
     this.segVolume = segVolume;
     this.segDims = segDims;
-    this.labels = discoverLabels(segVolume);
+    this.labels = discoverLabels(segVolume, apiLabels);
     this.colorLUT = buildColorLUT(this.labels);
     this.activeLabel = 0;
     this.notify();

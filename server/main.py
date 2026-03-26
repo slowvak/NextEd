@@ -10,6 +10,7 @@ directory to scan recursively for volumes.
 import sys
 from pathlib import Path
 import re
+import json
 
 # Ensure project root is on sys.path so 'server' package resolves
 _project_root = str(Path(__file__).resolve().parent.parent)
@@ -50,8 +51,10 @@ _segmentation_catalog: dict[str, list[SegmentationMetadata]] = {}
 _SEG_PATTERN = re.compile(r'_seg(mentation)?\.(nii\.gz|nii)$')
 
 
-def _find_companion_segmentations(volume_path: Path) -> list[Path]:
-    """Find companion segmentation files for a given volume path."""
+def _find_companion_segmentations(volume_path: Path) -> list[tuple[Path, list[dict]]]:
+    """Find companion segmentation files for a given volume path.
+    Returns list of (nifti_path, labels) tuples.
+    """
     stem = volume_path.name
     if stem.endswith('.nii.gz'):
         base = stem[:-7]
@@ -72,7 +75,16 @@ def _find_companion_segmentations(volume_path: Path) -> list[Path]:
     for pattern in patterns:
         candidate = parent / pattern
         if candidate.exists():
-            found.append(candidate)
+            labels = []
+            json_candidate = candidate.with_name(candidate.name.replace('.nii.gz', '.json').replace('.nii', '.json'))
+            if json_candidate.exists():
+                try:
+                    with open(json_candidate) as f:
+                        data = json.load(f)
+                        labels = data.get("labels", [])
+                except Exception as e:
+                    print(f"Warning: Failed to load labels from {json_candidate}: {e}")
+            found.append((candidate, labels))
     return found
 
 
@@ -143,17 +155,18 @@ def main():
             # Discover segmentations
             if fmt == "nifti":
                 comps = _find_companion_segmentations(Path(filepath))
-                for j, comp in enumerate(comps):
+                for j, (comp_path, comp_labels) in enumerate(comps):
                     seg_id = f"seg_{vol_id}_{j}"
                     seg_meta = SegmentationMetadata(
                         id=seg_id,
-                        name=comp.name,
-                        path=str(comp),
+                        name=comp_path.name,
+                        path=str(comp_path),
                         volume_id=vol_id,
-                        dimensions=None  # Can be populated upon load
+                        dimensions=None,  # Can be populated upon load
+                        labels=comp_labels
                     )
                     _segmentation_catalog[vol_id].append(seg_meta)
-                    print(f"    ↳ seg: [{seg_id}] {comp.name}")
+                    print(f"    ↳ seg: [{seg_id}] {comp_path.name}")
         except Exception as e:
             print(f"  [{vol_id}] FAILED to load {filepath}: {e}")
 

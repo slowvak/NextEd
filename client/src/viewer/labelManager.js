@@ -1,6 +1,6 @@
-import { getColorForLabel } from './colorPalette.js';
+import { getColorForLabel, hexToRgb } from './colorPalette.js';
 
-export function discoverLabels(segVolume) {
+export function discoverLabels(segVolume, apiLabels = []) {
   const unique = new Set();
   for (let i = 0; i < segVolume.length; i++) {
     unique.add(segVolume[i]);
@@ -8,13 +8,28 @@ export function discoverLabels(segVolume) {
   const labels = new Map();
   // Background always first (LABL-06)
   labels.set(0, { name: 'Background', value: 0, color: { r: 0, g: 0, b: 0 } });
+  
+  const metaMap = new Map();
+  for (const al of apiLabels) {
+    metaMap.set(al.value, al);
+  }
+  
   const sorted = [...unique].filter(v => v !== 0).sort((a, b) => a - b);
   for (const val of sorted) {
-    labels.set(val, {
-      name: `Label ${val}`,
-      value: val,
-      color: getColorForLabel(val),
-    });
+    const meta = metaMap.get(val);
+    if (meta) {
+      labels.set(val, {
+        name: meta.name || `Label ${val}`,
+        value: val,
+        color: meta.color ? hexToRgb(meta.color) : getColorForLabel(val),
+      });
+    } else {
+      labels.set(val, {
+        name: `Label ${val}`,
+        value: val,
+        color: getColorForLabel(val),
+      });
+    }
   }
   return labels;
 }

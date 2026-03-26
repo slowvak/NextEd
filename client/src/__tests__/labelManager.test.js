@@ -20,6 +20,20 @@ describe('labelManager', () => {
     expect(labels.has(255)).toBe(true);
   });
 
+  it('discoverLabels maps API metadata overrides', () => {
+    const vol = new Uint8Array([0, 1, 2]);
+    const apiLabels = [
+      { value: 1, name: 'Left Lung', color: '#ff0000' }
+    ];
+    const labels = discoverLabels(vol, apiLabels);
+    
+    expect(labels.size).toBe(3);
+    expect(labels.get(1).name).toBe('Left Lung');
+    expect(labels.get(1).color).toEqual({ r: 255, g: 0, b: 0 });
+    
+    expect(labels.get(2).name).toBe('Label 2'); // Fast fallback
+  });
+
   it('findLowestUnusedValue returns 1 for empty Map', () => {
     const labels = new Map();
     labels.set(0, { name: 'Background', value: 0 });
