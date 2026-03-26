@@ -98,11 +98,21 @@ function _setupViewerSidebar(sidebar, metadata, state, detailPanel) {
 
   sidebar.innerHTML = '';
 
+  const handleKeydown = (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      state.undo();
+    }
+  };
+  document.addEventListener('keydown', handleKeydown);
+
   // Back button (D-07)
   const backBtn = document.createElement('button');
   backBtn.className = 'sidebar-back-btn';
   backBtn.textContent = '\u2190 Back to volumes';
   backBtn.addEventListener('click', () => {
+    document.removeEventListener('keydown', handleKeydown);
     if (currentLayout) {
       currentLayout.destroy();
       currentLayout = null;
@@ -186,6 +196,22 @@ function _setupToolPanel(toolPanel, state) {
   };
   state.subscribe(updateActiveTool);
   updateActiveTool();
+
+  // Undo button
+  const undoBtn = document.createElement('button');
+  undoBtn.title = 'Undo (Ctrl+Z)';
+  undoBtn.textContent = '↶ Undo';
+  undoBtn.style.cssText = 'padding:6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff;margin-top:8px;width:100%; font-size:14px;';
+  
+  const updateUndoState = () => {
+    undoBtn.disabled = state.undoStack.length === 0;
+    undoBtn.style.opacity = undoBtn.disabled ? '0.5' : '1';
+  };
+  state.subscribe(updateUndoState);
+  updateUndoState();
+
+  undoBtn.addEventListener('click', () => state.undo());
+  toolPanel.insertBefore(undoBtn, toolSec.nextSibling);
 
   // Settings section
   const settingsSec = document.createElement('div');
