@@ -73,9 +73,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Save
 
-- [ ] **SAVE-01**: Always "Save As" — never overwrite source
-- [ ] **SAVE-02**: If segmentation was loaded, suggest that filename; else suggest `<basename>_seg.nii.gz`
-- [ ] **SAVE-03**: NIfTI sources save as .nii.gz
+- [x] **SAVE-01**: Always "Save As" — never overwrite source
+- [x] **SAVE-02**: If segmentation was loaded, suggest that filename; else suggest `<basename>_seg.nii.gz`
+- [x] **SAVE-03**: NIfTI sources save as .nii.gz
 - [ ] **SAVE-04**: DICOM sources prompt user to choose between .nii.gz and DICOM-SEG format
 
 ### Keyboard & Navigation
@@ -166,9 +166,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EDIT-08 | Phase 5 | Pending |
 | EDIT-09 | Phase 4 | Complete |
 | EDIT-10 | Phase 4 | Complete |
-| SAVE-01 | Phase 4 | Pending |
-| SAVE-02 | Phase 4 | Pending |
-| SAVE-03 | Phase 4 | Pending |
+| SAVE-01 | Phase 4 | Complete |
+| SAVE-02 | Phase 4 | Complete |
+| SAVE-03 | Phase 4 | Complete |
 | SAVE-04 | Phase 5 | Pending |
 | KEYS-01 | Phase 4 | Complete |
 
