@@ -68,7 +68,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **EDIT-06**: Oval ROI tool for drawing elliptical regions
 - [ ] **EDIT-07**: Shift+draw with ROI tools applies Otsu threshold within ROI; "on" class = bitmask value with fewest members on ROI outline
 - [ ] **EDIT-08**: Region grow tool — single-click seeded, global 3D, remembers previous parameters, OK to confirm
-- [ ] **EDIT-09**: 3 levels of undo via Ctrl-Z
+- [x] **EDIT-09**: 3 levels of undo via Ctrl-Z
 - [x] **EDIT-10**: Tool panel on left side with light gray background
 
 ### Save
@@ -80,7 +80,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Keyboard & Navigation
 
-- [ ] **KEYS-01**: Keyboard shortcuts for common tools (P=paintbrush, E=eraser, Z=undo, etc.)
+- [x] **KEYS-01**: Keyboard shortcuts for common tools (P=paintbrush, E=eraser, Z=undo, etc.)
 
 ## v2 Requirements
 
@@ -164,13 +164,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EDIT-06 | Phase 5 | Pending |
 | EDIT-07 | Phase 5 | Pending |
 | EDIT-08 | Phase 5 | Pending |
-| EDIT-09 | Phase 4 | Pending |
+| EDIT-09 | Phase 4 | Complete |
 | EDIT-10 | Phase 4 | Complete |
 | SAVE-01 | Phase 4 | Pending |
 | SAVE-02 | Phase 4 | Pending |
 | SAVE-03 | Phase 4 | Pending |
 | SAVE-04 | Phase 5 | Pending |
-| KEYS-01 | Phase 4 | Pending |
+| KEYS-01 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 48 total
