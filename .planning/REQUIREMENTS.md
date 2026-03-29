@@ -60,10 +60,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Editing Tools
 
-- [ ] **EDIT-01**: Paintbrush tool paints on current slice with current label
-- [ ] **EDIT-02**: Multi-slice painting via slider controlling how many adjacent slices are painted simultaneously
-- [ ] **EDIT-03**: Eraser via right mouse button (acts as paintbrush setting voxels to 0)
-- [ ] **EDIT-04**: Min/max pixel value range slider constraining which voxel values can be painted
+- [x] **EDIT-01**: Paintbrush tool paints on current slice with current label
+- [x] **EDIT-02**: Multi-slice painting via slider controlling how many adjacent slices are painted simultaneously
+- [x] **EDIT-03**: Eraser via right mouse button (acts as paintbrush setting voxels to 0)
+- [x] **EDIT-04**: Min/max pixel value range slider constraining which voxel values can be painted
 - [ ] **EDIT-05**: Rectangle ROI tool for drawing rectangular regions
 - [ ] **EDIT-06**: Oval ROI tool for drawing elliptical regions
 - [ ] **EDIT-07**: Shift+draw with ROI tools applies Otsu threshold within ROI; "on" class = bitmask value with fewest members on ROI outline
@@ -156,10 +156,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LABL-04 | Phase 3 | Pending |
 | LABL-05 | Phase 3 | Complete |
 | LABL-06 | Phase 3 | Complete |
-| EDIT-01 | Phase 4 | Pending |
-| EDIT-02 | Phase 4 | Pending |
-| EDIT-03 | Phase 4 | Pending |
-| EDIT-04 | Phase 4 | Pending |
+| EDIT-01 | Phase 4 | Complete |
+| EDIT-02 | Phase 4 | Complete |
+| EDIT-03 | Phase 4 | Complete |
+| EDIT-04 | Phase 4 | Complete |
 | EDIT-05 | Phase 5 | Pending |
 | EDIT-06 | Phase 5 | Pending |
 | EDIT-07 | Phase 5 | Pending |
