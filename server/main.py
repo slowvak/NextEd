@@ -91,9 +91,53 @@ def _find_companion_segmentations(volume_path: Path) -> list[tuple[Path, list[di
     return found
 
 
+_cache_path: Path | None = None  # Set in main(), used by label endpoints
+
+
 @app.get("/api/volumes", response_model=list[VolumeMetadata])
 async def list_volumes():
     return _catalog
+
+
+def _read_cache() -> dict:
+    """Read the full cache file."""
+    if _cache_path and _cache_path.exists():
+        try:
+            with open(_cache_path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _write_cache(cache: dict):
+    """Write the full cache file."""
+    if not _cache_path:
+        return
+    try:
+        with open(_cache_path, "w") as f:
+            json.dump(cache, f, indent=2, default=str)
+    except Exception as e:
+        print(f"Warning: Could not write cache: {e}")
+
+
+@app.get("/api/volumes/{volume_id}/labels")
+async def get_labels(volume_id: str):
+    """Return saved label definitions (name, color) for a volume."""
+    cache = _read_cache()
+    labels = cache.get("labels", {}).get(volume_id, [])
+    return labels
+
+
+@app.put("/api/volumes/{volume_id}/labels")
+async def put_labels(volume_id: str, labels: list[dict]):
+    """Save label definitions (name, value, color) for a volume."""
+    cache = _read_cache()
+    if "labels" not in cache:
+        cache["labels"] = {}
+    cache["labels"][volume_id] = labels
+    _write_cache(cache)
+    return {"ok": True}
 
 
 # --- Volume entry: unified representation for discovered volumes ---
@@ -322,10 +366,12 @@ def main():
     paths = sys.argv[1:]
 
     # Determine cache location
+    global _cache_path
     cache_dir = Path(paths[0]).expanduser().resolve()
     if cache_dir.is_file():
         cache_dir = cache_dir.parent
     cache_path = cache_dir / _CACHE_FILENAME
+    _cache_path = cache_path
 
     t0 = time.time()
     print("Scanning for volumes...")

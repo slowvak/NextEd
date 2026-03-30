@@ -82,6 +82,42 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
 
     const state = new ViewerState({ dims, spacing, modality, windowCenter, windowWidth, dataMin, dataMax });
 
+    // Load saved labels from cache
+    try {
+      const savedLabels = await fetch(`/api/volumes/${volume.id}/labels`).then(r => r.json());
+      if (Array.isArray(savedLabels) && savedLabels.length > 0) {
+        for (const lb of savedLabels) {
+          if (lb.value && lb.value !== 0) {
+            state.labels.set(lb.value, {
+              name: lb.name || `Label ${lb.value}`,
+              value: lb.value,
+              color: lb.color || { r: 200, g: 200, b: 200 },
+              isVisible: true,
+            });
+          }
+        }
+        const { buildColorLUT } = await import('./viewer/overlayBlender.js');
+        state.colorLUT = buildColorLUT(state.labels);
+      }
+    } catch (e) {
+      console.warn('[NextEd] Could not load saved labels:', e);
+    }
+
+    // Auto-save labels when they change
+    const saveLabels = () => {
+      const labels = [];
+      for (const [val, lb] of state.labels) {
+        if (val === 0) continue;
+        labels.push({ value: val, name: lb.name, color: lb.color });
+      }
+      fetch(`/api/volumes/${volume.id}/labels`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(labels),
+      }).catch(() => {});
+    };
+    state.subscribe(saveLabels);
+
     // Clean up previous layout
     if (currentLayout) {
       currentLayout.destroy();
@@ -403,6 +439,16 @@ function _setupToolPanel(toolPanel, state, metadata) {
       </div>
     `;
     
+    const DEFAULT_LABEL_COLORS = [
+        null,                        // 0 = background, not used
+        { r: 255, g: 0,   b: 0   }, // 1 = red
+        { r: 0,   g: 255, b: 0   }, // 2 = green
+        { r: 0,   g: 0,   b: 255 }, // 3 = blue
+        { r: 255, g: 255, b: 0   }, // 4 = yellow
+        { r: 0,   g: 255, b: 255 }, // 5 = cyan
+        { r: 255, g: 0,   b: 255 }, // 6 = magenta
+    ];
+
     labelsSec.querySelector('#add-label-btn').addEventListener('click', () => {
         if (!state.segVolume) {
             const [dx, dy, dz] = state.dims;
@@ -410,10 +456,23 @@ function _setupToolPanel(toolPanel, state, metadata) {
         }
         const name = prompt("Enter label name:", "New Label");
         if (name) {
-            const r = Math.floor(Math.random()*150 + 100);
-            const g = Math.floor(Math.random()*150 + 100);
-            const b = Math.floor(Math.random()*150 + 100);
-            const val = state.addLabel(name, { r, g, b });
+            // Determine next label value
+            const nextVal = state.labels.size > 0 ? Math.max(...state.labels.keys()) + 1 : 1;
+            let color;
+            if (nextVal < DEFAULT_LABEL_COLORS.length) {
+                color = DEFAULT_LABEL_COLORS[nextVal];
+            } else {
+                const hex = prompt("Enter color (hex, e.g. #ff8800):", "#ff8800");
+                if (!hex) return;
+                const m = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+                if (m) {
+                    color = { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+                } else {
+                    alert("Invalid hex color. Use format #rrggbb");
+                    return;
+                }
+            }
+            const val = state.addLabel(name, color);
             if (val !== null) state.setActiveLabel(val);
         }
     });
