@@ -32,35 +32,58 @@ async def list_segmentations(volume_id: str) -> list[SegmentationMetadata]:
 @router.post("/volumes/{volume_id}/segmentations")
 async def save_segmentation(volume_id: str, request: Request, filename: str) -> dict:
     """Save binary segmentation data to a NIfTI file."""
-    from server.main import _catalog
+    from server.main import _catalog, _segmentation_catalog
+    from server.catalog.models import SegmentationMetadata
+    from server.api.volumes import _volume_cache
     
-    if volume_id not in _catalog:
+    vol_meta = next((v for v in _catalog if v.id == volume_id), None)
+    if not vol_meta:
         raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
         
-    vol_meta = _catalog[volume_id]
+    if volume_id not in _volume_cache:
+        raise HTTPException(status_code=400, detail=f"Volume {volume_id} must be loaded before saving segmentation")
+        
+    _, metadata, _ = _volume_cache[volume_id]
+    affine = metadata.get("affine", np.eye(4))
+    
     body = await request.body()
     
     try:
-        # Load source volume to get canonical affine and header
-        ref_img = nib.load(vol_meta.path)
-        canonical_ref = nib.as_closest_canonical(ref_img)
-        dimX, dimY, dimZ = canonical_ref.shape[:3]
+        dimX, dimY, dimZ = vol_meta.dimensions
         
         # Reshape the client binary input (Z, Y, X) and transpose back to (X, Y, Z)
         data_z_y_x = np.frombuffer(body, dtype=np.uint8).reshape((dimZ, dimY, dimX))
         transposed_array = data_z_y_x.transpose(2, 1, 0)
         
-        # Create new NIfTI image
-        new_img = nib.Nifti1Image(transposed_array, canonical_ref.affine, canonical_ref.header.copy())
+        # Create new NIfTI image using cached affine
+        new_img = nib.Nifti1Image(transposed_array, affine)
         new_img.set_data_dtype(np.uint8)
         
-        # Save to disk
+        # Save to disk (for DICOM this places it next to the folder)
         out_path = Path(vol_meta.path).parent / filename
         nib.save(new_img, out_path)
         
+        # Make sure the catalog knows about this new file
+        if volume_id not in _segmentation_catalog:
+            _segmentation_catalog[volume_id] = []
+            
+        seg_id = f"seg_{volume_id}_{filename}"
+        existing = next((s for s in _segmentation_catalog[volume_id] if s.name == filename), None)
+        if not existing:
+            _segmentation_catalog[volume_id].append(SegmentationMetadata(
+                id=seg_id,
+                name=filename,
+                path=str(out_path),
+                volume_id=volume_id,
+                dimensions=list(vol_meta.dimensions),
+                labels=[]
+            ))
+            
         return {"status": "success", "filename": filename, "path": str(out_path)}
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to save segmentation: {e}")
 
 

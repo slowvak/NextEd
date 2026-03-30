@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -12,24 +13,75 @@ from server.loaders.nifti_loader import load_nifti_volume
 
 router = APIRouter(prefix="/api/volumes", tags=["volumes"])
 
-# In-memory volume cache (simple dict for now)
+# In-memory volume cache: volume_id -> (data_array, loader_metadata)
+# Populated lazily when a volume is first opened.
 _volume_cache: dict[str, tuple] = {}
+
+# Metadata-only registry: volume_id -> VolumeMetadata
+# Populated at startup from cache or full scan. No pixel data needed.
+_metadata_registry: dict[str, VolumeMetadata] = {}
+
+# Path+format registry for lazy loading: volume_id -> (path, format)
+_path_registry: dict[str, tuple[str, str]] = {}
+
+
+def register_volume(vol_id: str, meta: VolumeMetadata, path: str, fmt: str):
+    """Register volume metadata without loading pixel data."""
+    _metadata_registry[vol_id] = meta
+    _path_registry[vol_id] = (path, fmt)
+
+
+def _ensure_loaded(volume_id: str):
+    """Load volume pixel data into cache if not already present."""
+    if volume_id in _volume_cache:
+        return
+    if volume_id not in _path_registry:
+        raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
+
+    path, fmt = _path_registry[volume_id]
+    filepath = Path(path)
+    if fmt != "dicom_series" and not filepath.exists():
+        raise HTTPException(status_code=404, detail=f"Volume file not found: {path}")
+
+    if fmt == "nifti":
+        data, metadata = load_nifti_volume(filepath)
+    elif fmt == "dicom_series":
+        from server.loaders.dicom_loader import load_dicom_series
+        file_list = json.loads(path)
+        data, metadata = load_dicom_series(file_list)
+    else:
+        from server.loaders.dicom_loader import load_dicom_volume
+        data, metadata = load_dicom_volume(filepath)
+
+    # Update metadata registry with full loader metadata (may have more accurate values)
+    old_meta = _metadata_registry[volume_id]
+    updated = old_meta.model_copy(update={
+        "dimensions": metadata["dimensions"],
+        "voxel_spacing": metadata["voxel_spacing"],
+        "dtype": metadata["dtype"],
+        "modality": metadata.get("modality", old_meta.modality),
+        "window_center": metadata["window_center"],
+        "window_width": metadata["window_width"],
+        "data_min": metadata.get("data_min"),
+        "data_max": metadata.get("data_max"),
+    })
+    _metadata_registry[volume_id] = updated
+    _volume_cache[volume_id] = (data, metadata)
 
 
 @router.get("/{volume_id}/metadata", response_model=VolumeMetadata)
 async def get_volume_metadata(volume_id: str) -> VolumeMetadata:
     """Return volume metadata including spacing and auto-window values.
 
-    Loads the volume if not already cached, extracts metadata with
-    RAS+ normalized voxel_spacing, window_center, and window_width.
+    If the volume hasn't been fully loaded yet, loads it now to get
+    accurate metadata (dimensions, window values, data range).
     """
-    # For now, volume_id is treated as a path-safe identifier
-    # A catalog layer would resolve id -> path in a full implementation
-    if volume_id not in _volume_cache:
+    if volume_id not in _metadata_registry:
         raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
 
-    _, metadata, vol_meta = _volume_cache[volume_id]
-    return vol_meta
+    # Ensure full load so metadata has accurate window/data_min/max values
+    _ensure_loaded(volume_id)
+    return _metadata_registry[volume_id]
 
 
 @router.get("/{volume_id}/data")
@@ -42,11 +94,9 @@ async def get_volume_data(volume_id: str) -> Response:
     - X-Window-Center: auto-windowing center value
     - X-Window-Width: auto-windowing width value
     """
-    if volume_id not in _volume_cache:
-        raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
+    _ensure_loaded(volume_id)
 
-    data, metadata, _ = _volume_cache[volume_id]
-
+    data, metadata = _volume_cache[volume_id]
     dims = metadata["dimensions"]
     spacing = metadata["voxel_spacing"]
 
@@ -64,13 +114,14 @@ async def get_volume_data(volume_id: str) -> Response:
     )
 
 
+# Keep backward compat for code that uses this function directly
 def load_and_cache_volume(
     volume_id: str, path: str, format: str = "nifti"
 ) -> VolumeMetadata:
     """Load a volume from disk, cache it, and return metadata.
 
-    This function is called by the catalog/browser layer when a user
-    opens a volume. It handles loading, RAS+ normalization, and caching.
+    This eagerly loads the volume. Prefer register_volume() + lazy loading
+    for faster startup.
     """
     filepath = Path(path)
     if not filepath.exists():
@@ -80,7 +131,6 @@ def load_and_cache_volume(
         data, metadata = load_nifti_volume(filepath)
     else:
         from server.loaders.dicom_loader import load_dicom_volume
-
         data, metadata = load_dicom_volume(filepath)
 
     vol_meta = VolumeMetadata(
@@ -94,7 +144,11 @@ def load_and_cache_volume(
         modality=metadata.get("modality", "unknown"),
         window_center=metadata["window_center"],
         window_width=metadata["window_width"],
+        data_min=metadata.get("data_min"),
+        data_max=metadata.get("data_max"),
     )
 
-    _volume_cache[volume_id] = (data, metadata, vol_meta)
+    _volume_cache[volume_id] = (data, metadata)
+    _metadata_registry[volume_id] = vol_meta
+    _path_registry[volume_id] = (path, format)
     return vol_meta

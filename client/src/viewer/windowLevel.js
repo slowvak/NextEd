@@ -7,18 +7,16 @@
  */
 
 /**
- * Apply window/level mapping to slice data, writing to an RGBA buffer.
- *
- * @param {Float32Array} sliceData - Raw voxel values for one slice
- * @param {Uint8ClampedArray} rgba - Target RGBA buffer (length = sliceData.length * 4)
- * @param {number} windowCenter - Center (level) value
- * @param {number} windowWidth - Width value (must be >= 1)
- */
-/**
  * Compute new window/level values from a drag delta.
  *
+ * Follows standard PACS convention:
+ *   - Drag right  (dx > 0) → wider window (less contrast)
+ *   - Drag left   (dx < 0) → narrower window (more contrast)
+ *   - Drag down   (dy > 0) → lower center → brighter image
+ *   - Drag up     (dy < 0) → higher center → darker image
+ *
  * @param {number} dx - Horizontal pixel delta (right = wider)
- * @param {number} dy - Vertical pixel delta (down = darker = higher center)
+ * @param {number} dy - Vertical pixel delta (down = brighter = lower center)
  * @param {number} currentCenter - Current window center
  * @param {number} currentWidth - Current window width
  * @returns {{ center: number, width: number }}
@@ -26,9 +24,18 @@
 export function computeWLDrag(dx, dy, currentCenter, currentWidth) {
   const sensitivity = currentWidth / 300;
   const width = Math.max(1, currentWidth + dx * sensitivity);
-  const center = currentCenter + dy * sensitivity;
+  const center = currentCenter - dy * sensitivity;
   return { center, width };
 }
+
+/**
+ * Apply window/level mapping to slice data, writing to an RGBA buffer.
+ *
+ * @param {Float32Array} sliceData - Raw voxel values for one slice
+ * @param {Uint8ClampedArray} rgba - Target RGBA buffer (length = sliceData.length * 4)
+ * @param {number} windowCenter - Center (level) value
+ * @param {number} windowWidth - Width value (must be >= 1)
+ */
 
 export function applyWindowLevel(sliceData, rgba, windowCenter, windowWidth) {
   const len = sliceData.length;

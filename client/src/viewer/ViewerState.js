@@ -14,11 +14,15 @@ export class ViewerState {
    * @param {string} options.modality - "CT", "MR", or "unknown"
    * @param {number} options.windowCenter - Initial window center (level)
    * @param {number} options.windowWidth - Initial window width
+   * @param {number|null} [options.dataMin] - Minimum voxel value in the volume
+   * @param {number|null} [options.dataMax] - Maximum voxel value in the volume
    */
-  constructor({ dims, spacing, modality, windowCenter, windowWidth }) {
+  constructor({ dims, spacing, modality, windowCenter, windowWidth, dataMin = null, dataMax = null }) {
     this.dims = dims;
     this.spacing = spacing;
     this.modality = modality;
+    this.dataMin = dataMin;
+    this.dataMax = dataMax;
 
     // Start at center slice of each dimension (VIEW-02)
     this.cursor = [
@@ -32,10 +36,16 @@ export class ViewerState {
     this.activePreset = null;
     this.singleView = null; // 'axial' | 'coronal' | 'sagittal' | null
 
+    // Cursor voxel intensity — updated by ViewerPanel on mouse hover
+    this.cursorValue = null;
+
+    /** @type {Array<function(number|null): void>} */
+    this.cursorValueListeners = [];
+
     // Tools state
     this.activeTool = 'crosshair';
     this.brushRadius = 2;
-    this.multiSlice = 0;
+    this.multiSlice = 1; // Odd number: 1=current only, 3=current±1, 5=current±2, etc.
     this.paintConstraintMin = -1024;
     this.paintConstraintMax = 3000;
 
@@ -65,6 +75,32 @@ export class ViewerState {
       Math.max(0, Math.min(Math.floor(z), this.dims[2] - 1)),
     ];
     this.notify();
+  }
+
+  /**
+   * Set the raw voxel intensity value at the current hover position.
+   * Fires only the lightweight cursorValueListeners, NOT the full notify(),
+   * to avoid triggering slice re-renders on every mouse move.
+   * @param {number|null} value - Raw voxel intensity, or null if outside volume
+   */
+  setCursorValue(value) {
+    this.cursorValue = value;
+    for (const fn of this.cursorValueListeners) {
+      fn(value);
+    }
+  }
+
+  /**
+   * Subscribe to cursor value changes only (no re-render triggered).
+   * @param {function(number|null): void} fn
+   * @returns {function(): void} Unsubscribe function
+   */
+  subscribeCursorValue(fn) {
+    this.cursorValueListeners.push(fn);
+    return () => {
+      const idx = this.cursorValueListeners.indexOf(fn);
+      if (idx !== -1) this.cursorValueListeners.splice(idx, 1);
+    };
   }
 
   /**
@@ -121,7 +157,10 @@ export class ViewerState {
   }
 
   setMultiSlice(depth) {
-    this.multiSlice = Math.max(0, depth);
+    // Ensure odd: round up to next odd number, minimum 1
+    depth = Math.max(1, depth);
+    if (depth % 2 === 0) depth += 1;
+    this.multiSlice = depth;
     this.notify();
   }
 

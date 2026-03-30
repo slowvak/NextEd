@@ -51,19 +51,16 @@ export function canvasToVoxel(canvasX, canvasY, axis, canvasH, canvasV, dims) {
   const cursorUpdates = {};
 
   if (axis === 'axial') {
-    // Axial: canvasX -> cursor[0] (x), canvasY -> cursor[1] (y)
-    // Y is flipped in rendering (anterior at top), so invert Y
-    cursorUpdates[0] = Math.max(0, Math.min(voxelX, dims[0] - 1));
+    // Axial: X-flipped (right on left), Y-flipped (anterior at top)
+    cursorUpdates[0] = Math.max(0, Math.min(dims[0] - 1 - voxelX, dims[0] - 1));
     cursorUpdates[1] = Math.max(0, Math.min(dims[1] - 1 - voxelY, dims[1] - 1));
   } else if (axis === 'coronal') {
-    // Coronal: canvasX -> cursor[0] (x), canvasY -> cursor[2] (z)
-    // Z is flipped in rendering (superior at top), so invert Y
-    cursorUpdates[0] = Math.max(0, Math.min(voxelX, dims[0] - 1));
+    // Coronal: X-flipped (right on left), Z-flipped (superior at top)
+    cursorUpdates[0] = Math.max(0, Math.min(dims[0] - 1 - voxelX, dims[0] - 1));
     cursorUpdates[2] = Math.max(0, Math.min(dims[2] - 1 - voxelY, dims[2] - 1));
   } else {
-    // Sagittal: canvasX -> cursor[1] (y), canvasY -> cursor[2] (z)
-    // Z is flipped in rendering (superior at top), so invert Y
-    cursorUpdates[1] = Math.max(0, Math.min(voxelX, dims[1] - 1));
+    // Sagittal: Y-flipped (anterior on left), Z-flipped (superior at top)
+    cursorUpdates[1] = Math.max(0, Math.min(dims[1] - 1 - voxelX, dims[1] - 1));
     cursorUpdates[2] = Math.max(0, Math.min(dims[2] - 1 - voxelY, dims[2] - 1));
   }
 
@@ -91,6 +88,7 @@ export class ViewerPanel {
     this._isDraggingCrosshair = false;
     this._isDraggingWL = false;
     this._isPainting = false;
+    this._currentDiff = null;
     this._lastWLX = 0;
     this._lastWLY = 0;
 
@@ -179,6 +177,37 @@ export class ViewerPanel {
     this.canvasContainer = canvasContainer;
   }
 
+  /**
+   * Update the canvas cursor based on the active tool.
+   * Paint/erase: circular outline matching brush radius.
+   * Crosshair/other: standard crosshair cursor.
+   */
+  _updateCursor() {
+    const tool = this.state.activeTool;
+    if (tool === 'paint' || tool === 'erase') {
+      // Compute CSS pixel radius from voxel radius using canvas scaling
+      const voxelRadius = this.state.brushRadius;
+      const scaleX = this.canvas.clientWidth / this.canvas.width;
+      const diameter = Math.max(4, Math.round(voxelRadius * 2 * scaleX));
+      const size = diameter + 2; // +2 for stroke
+      const half = size / 2;
+
+      // Draw circle cursor on a tiny canvas and convert to data URL
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.strokeStyle = tool === 'paint' ? '#00ff00' : '#ff4444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(half, half, diameter / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      this.canvas.style.cursor = `url(${c.toDataURL()}) ${half} ${half}, crosshair`;
+    } else {
+      this.canvas.style.cursor = 'crosshair';
+    }
+  }
+
   _setupResizeObserver() {
     this.resizeObserver = new ResizeObserver(() => {
       if (this.volume) {
@@ -207,6 +236,7 @@ export class ViewerPanel {
       } else if (this.state.activeTool === 'paint' || this.state.activeTool === 'erase') {
         e.preventDefault();
         this._isPainting = true;
+        this._currentDiff = { indices: [], oldValues: [], seen: new Set() };
         this._applyBrush(e);
       } else {
         // Crosshair click+drag
@@ -235,7 +265,14 @@ export class ViewerPanel {
     // Mouse up: stop all drags
     this._onMouseUp = () => {
       this._isDraggingCrosshair = false;
-      this._isPainting = false;
+      if (this._isPainting) {
+        this._isPainting = false;
+        if (this._currentDiff) {
+          delete this._currentDiff.seen;
+          this.state.pushUndo(this._currentDiff);
+          this._currentDiff = null;
+        }
+      }
       if (this._isDraggingWL) {
         this._isDraggingWL = false;
         this.canvas.style.cursor = '';
@@ -244,6 +281,42 @@ export class ViewerPanel {
 
     document.addEventListener('mousemove', this._onMouseMove);
     document.addEventListener('mouseup', this._onMouseUp);
+
+    // Mouse move on canvas (hover): update pixel value readout
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (!this.volume || !this.dims) return;
+      // Guard against zero-size canvas (not yet laid out)
+      if (this.canvas.clientWidth <= 0 || this.canvas.clientHeight <= 0) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const cssX = e.clientX - rect.left;
+      const cssY = e.clientY - rect.top;
+      const { cursorUpdates } = canvasToVoxel(
+        cssX, cssY, this.axis,
+        { width: this.canvas.width, clientWidth: this.canvas.clientWidth },
+        { height: this.canvas.height, clientHeight: this.canvas.clientHeight },
+        this.dims
+      );
+      const [cx, cy, cz] = this.state.cursor;
+      const x = cursorUpdates[0] !== undefined ? cursorUpdates[0] : cx;
+      const y = cursorUpdates[1] !== undefined ? cursorUpdates[1] : cy;
+      const z = cursorUpdates[2] !== undefined ? cursorUpdates[2] : cz;
+      const [dimX, dimY, dimZ] = this.dims;
+      // Clamp all coordinates to valid range before indexing
+      const cx2 = Math.max(0, Math.min(Math.floor(x), dimX - 1));
+      const cy2 = Math.max(0, Math.min(Math.floor(y), dimY - 1));
+      const cz2 = Math.max(0, Math.min(Math.floor(z), dimZ - 1));
+      const idx = cz2 * (dimX * dimY) + cy2 * dimX + cx2;
+      if (!this._pixelLogDone) {
+        console.log(`[NextEd pixel] axis=${this.axis} voxel=(${cx2},${cy2},${cz2}) idx=${idx} val=${this.volume[idx]} volLen=${this.volume.length}`);
+        this._pixelLogDone = true;
+        setTimeout(() => { this._pixelLogDone = false; }, 2000);
+      }
+      this.state.setCursorValue(this.volume[idx]);
+    });
+
+    this.canvas.addEventListener('mouseleave', () => {
+      this.state.setCursorValue(null);
+    });
 
     // Mouse wheel: scroll slices (D-01, D-02, D-03)
     this.canvas.addEventListener('wheel', (e) => {
@@ -290,7 +363,10 @@ export class ViewerPanel {
    * Apply brush stroke to segmentation volume based on active tools and dimensions.
    */
   _applyBrush(e) {
-    if (!this.state.segVolume) return;
+    if (!this.state.segVolume) {
+      console.warn('[NextEd] Paint ignored: no segmentation volume. Create a label first.');
+      return;
+    }
     
     const rect = this.canvas.getBoundingClientRect();
     const cssX = e.clientX - rect.left;
@@ -321,7 +397,7 @@ export class ViewerPanel {
     const { brushRadius, multiSlice, paintConstraintMin, paintConstraintMax, activeTool, activeLabel } = this.state;
     const [dimX, dimY, dimZ] = this.dims;
     const R2 = brushRadius * brushRadius;
-    const sliceRange = multiSlice;
+    const sliceRange = Math.floor((multiSlice - 1) / 2); // 1→0, 3→1, 5→2, etc.
     let modified = false;
 
     const depthMax = this.axis === 'axial' ? dimZ : (this.axis === 'coronal' ? dimY : dimX);
@@ -351,7 +427,13 @@ export class ViewerPanel {
             
             if (val >= paintConstraintMin && val <= paintConstraintMax) {
               const newVal = activeTool === 'paint' ? activeLabel : 0;
-              if (this.state.segVolume[idx] !== newVal) {
+              const currentVal = this.state.segVolume[idx];
+              if (currentVal !== newVal) {
+                if (this._currentDiff && !this._currentDiff.seen.has(idx)) {
+                  this._currentDiff.indices.push(idx);
+                  this._currentDiff.oldValues.push(currentVal);
+                  this._currentDiff.seen.add(idx);
+                }
                 this.state.segVolume[idx] = newVal;
                 modified = true;
               }
@@ -545,16 +627,16 @@ export class ViewerPanel {
 
     let crossX, crossY;
     if (this.axis === 'axial') {
-      crossX = this.state.cursor[0]; // vertical line at cursor X
-      // Y is flipped in rendering (anterior at top)
+      // X-flipped (right on left), Y-flipped (anterior at top)
+      crossX = this.dims[0] - 1 - this.state.cursor[0];
       crossY = this.dims[1] - 1 - this.state.cursor[1];
     } else if (this.axis === 'coronal') {
-      crossX = this.state.cursor[0]; // vertical line at cursor X
-      // Z is flipped in rendering (superior at top)
+      // X-flipped (right on left), Z-flipped (superior at top)
+      crossX = this.dims[0] - 1 - this.state.cursor[0];
       crossY = this.dims[2] - 1 - this.state.cursor[2];
     } else {
-      crossX = this.state.cursor[1]; // vertical line at cursor Y
-      // Z is flipped in rendering (superior at top)
+      // Y-flipped (anterior on left), Z-flipped (superior at top)
+      crossX = this.dims[1] - 1 - this.state.cursor[1];
       crossY = this.dims[2] - 1 - this.state.cursor[2];
     }
 

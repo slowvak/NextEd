@@ -9,17 +9,19 @@ describe('computeWLDrag', () => {
     expect(result.center).toBe(100);
   });
 
-  it('vertical delta +30px (down) increases windowCenter (darker)', () => {
-    // sensitivity = 300/300 = 1.0, new center = 100 + 30*1.0 = 130
+  it('vertical delta +30px (down) decreases windowCenter (brighter)', () => {
+    // Standard PACS convention: drag down = lower center = brighter
+    // sensitivity = 300/300 = 1.0, new center = 100 - 30*1.0 = 70
     const result = computeWLDrag(0, 30, 100, 300);
-    expect(result.center).toBe(130);
+    expect(result.center).toBe(70);
     expect(result.width).toBe(300);
   });
 
-  it('vertical delta -30px (up) decreases windowCenter (brighter)', () => {
-    // new center = 100 + (-30)*1.0 = 70
+  it('vertical delta -30px (up) increases windowCenter (darker)', () => {
+    // Standard PACS convention: drag up = higher center = darker
+    // new center = 100 - (-30)*1.0 = 130
     const result = computeWLDrag(0, -30, 100, 300);
-    expect(result.center).toBe(70);
+    expect(result.center).toBe(130);
   });
 
   it('minimum windowWidth is 1', () => {

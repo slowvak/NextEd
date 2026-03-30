@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "WebSearch",
+      "Bash(python3 -c \"from pptx import Presentation; print\\(''pptx available''\\)\")",
+      "Bash(python3:*)",
+      "Bash(ls /Users/bje/repos/NextEd/components.json /Users/bje/repos/NextEd/tailwind.config.* /Users/bje/repos/NextEd/postcss.config.*)",
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(grep -l \"## Validation Architecture\" /Users/bje/repos/NextEd/.planning/phases/02-core-viewer/*-RESEARCH.md)",
+      "Bash(ls /Users/bje/repos/NextEd/.planning/phases/02-core-viewer/*-UI-SPEC.md)",
+      "Bash(git worktree:*)",
+      "Bash(git branch:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npm run:*)",
+      "Bash(for h:*)",
+      "Bash(do git:*)",
+      "Bash(grep -q \"$h\")",
+      "Bash(echo \"FOUND: $h\")",
+      "Bash(echo \"MISSING: $h\")",
+      "Bash(done)",
+      "Bash(git merge:*)",
+      "Bash(python:*)",
+      "Skill(gsd:discuss-phase)",
+      "Skill(gsd:plan-phase)",
+      "Bash(find /Users/bje/repos/NextEd -name *.nii* -o -name *.dcm)",
+      "mcp__browser-tools__takeScreenshot",
+      "mcp__browser-tools__getConsoleLogs",
+      "Skill(gsd:debug)",
+      "Bash(uv run:*)",
+      "Bash(npm:*)",
+      "Bash(npx jest:*)"
+    ]
+  }
+}

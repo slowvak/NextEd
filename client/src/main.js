@@ -11,7 +11,7 @@ let currentVolume = null;
 let currentLayout = null;
 
 async function init() {
-  const { listContainer, detailPanel, sidebar } = createAppShell();
+  const { listContainer, detailPanel, sidebar, toolPanel } = createAppShell();
   renderEmptyState(detailPanel);
 
   try {
@@ -59,10 +59,28 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
     const modality = metadata.modality || 'unknown';
     const windowCenter = metadata.window_center ?? 128;
     const windowWidth = metadata.window_width ?? 256;
+    const dataMin = metadata.data_min ?? null;
+    const dataMax = metadata.data_max ?? null;
 
     const float32Volume = new Float32Array(arrayBuffer);
 
-    const state = new ViewerState({ dims, spacing, modality, windowCenter, windowWidth });
+    // Diagnostic: show actual data stats in console
+    let vMin = Infinity, vMax = -Infinity, nonZeroCount = 0;
+    for (let i = 0; i < float32Volume.length; i++) {
+      const v = float32Volume[i];
+      if (v < vMin) vMin = v;
+      if (v > vMax) vMax = v;
+      if (v !== 0) nonZeroCount++;
+    }
+    console.log(`[NextEd] Volume loaded: ${float32Volume.length} voxels, range [${vMin}, ${vMax}], non-zero: ${nonZeroCount}, metadata data_min=${dataMin} data_max=${dataMax}, W/L=${windowWidth}/${windowCenter}`);
+    // Sample 10 non-zero values
+    const samples = [];
+    for (let i = 0; i < float32Volume.length && samples.length < 10; i++) {
+      if (float32Volume[i] !== 0) samples.push(float32Volume[i]);
+    }
+    console.log(`[NextEd] Sample non-zero values:`, samples);
+
+    const state = new ViewerState({ dims, spacing, modality, windowCenter, windowWidth, dataMin, dataMax });
 
     // Clean up previous layout
     if (currentLayout) {
@@ -144,6 +162,32 @@ function _setupViewerSidebar(sidebar, metadata, state, detailPanel) {
     (metadata.modality ? `<br>${metadata.modality}` : '');
   sidebar.appendChild(metaEl);
 
+  // Pixel value readout — shows raw voxel intensity at cursor (hover)
+  const pixelReadout = document.createElement('div');
+  pixelReadout.className = 'sidebar-pixel-readout';
+  pixelReadout.textContent = 'Hover over image to see pixel value';
+  const updatePixelReadout = (val) => {
+    if (val === null || val === undefined) {
+      pixelReadout.textContent = '\u2014';
+    } else {
+      // Always format as a number with appropriate precision.
+      // Avoid Number.isInteger() — float32 values like 0.0 and 1.0 pass
+      // isInteger() but are genuine floats, not integer-typed data.
+      // Use one decimal place for values >= 10 (CT HU range), three for
+      // small float ranges (e.g. normalized 0–1 MRI data).
+      const absVal = Math.abs(val);
+      let formatted;
+      if (absVal >= 10 || absVal === 0) {
+        formatted = val.toFixed(1);
+      } else {
+        formatted = val.toFixed(3);
+      }
+      pixelReadout.textContent = `Pixel: ${formatted}`;
+    }
+  };
+  state.subscribeCursorValue(updatePixelReadout);
+  sidebar.appendChild(pixelReadout);
+
   // W/L presets (visible only for CT per WLVL-04)
   const presetBar = createPresetBar(state);
   sidebar.appendChild(presetBar);
@@ -209,7 +253,9 @@ function _setupToolPanel(toolPanel, state, metadata) {
         body: state.segVolume,
         headers: { 'Content-Type': 'application/octet-stream' }
       }).then(res => {
-        if (!res.ok) throw new Error('Save failed');
+        if (!res.ok) {
+           return res.json().then(errData => { throw new Error(errData.detail || 'Save failed'); }).catch(() => { throw new Error('Save failed'); });
+        }
         return res.json();
       }).then(data => {
         close();
@@ -285,7 +331,7 @@ function _setupToolPanel(toolPanel, state, metadata) {
     <input type="range" id="brush-radius" min="1" max="20" step="1" value="${state.brushRadius}">
     
     <label class="detail-label" style="margin-top:8px;">Multi-Slice Depth: <span id="multi-slice-val">${state.multiSlice}</span></label>
-    <input type="range" id="multi-slice" min="0" max="10" step="1" value="${state.multiSlice}">
+    <input type="range" id="multi-slice" min="1" max="21" step="2" value="${state.multiSlice}">
   `;
   toolPanel.appendChild(settingsSec);
 
@@ -325,6 +371,23 @@ function _setupToolPanel(toolPanel, state, metadata) {
   minInput.addEventListener('change', updateConstraints);
   maxInput.addEventListener('change', updateConstraints);
 
+  // Overlay opacity slider
+  const opacitySec = document.createElement('div');
+  opacitySec.className = 'tool-section';
+  opacitySec.innerHTML = `
+    <label class="detail-label">Label Overlay Opacity: <span id="opacity-val">${Math.round(state.overlayOpacity * 100)}%</span></label>
+    <input type="range" id="overlay-opacity" min="0" max="100" step="5" value="${Math.round(state.overlayOpacity * 100)}">
+  `;
+  toolPanel.appendChild(opacitySec);
+
+  const opacityInput = opacitySec.querySelector('#overlay-opacity');
+  const opacityVal = opacitySec.querySelector('#opacity-val');
+  opacityInput.addEventListener('input', (e) => {
+    const pct = parseInt(e.target.value, 10);
+    opacityVal.textContent = `${pct}%`;
+    state.setOverlayOpacity(pct / 100);
+  });
+
   // Labels section
   const labelsSec = document.createElement('div');
   labelsSec.className = 'tool-section';
@@ -333,7 +396,28 @@ function _setupToolPanel(toolPanel, state, metadata) {
   toolPanel.appendChild(labelsSec);
   
   const renderLabels = () => {
-    labelsSec.innerHTML = '<label class="detail-label">Labels</label>';
+    labelsSec.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <label class="detail-label" style="margin:0;">Labels</label>
+        <button id="add-label-btn" title="Add Label" style="background:none;border:none;color:#4a9eff;cursor:pointer;font-size:16px;">➕</button>
+      </div>
+    `;
+    
+    labelsSec.querySelector('#add-label-btn').addEventListener('click', () => {
+        if (!state.segVolume) {
+            const [dx, dy, dz] = state.dims;
+            state.setSegmentation(new Uint8Array(dx*dy*dz), state.dims, []);
+        }
+        const name = prompt("Enter label name:", "New Label");
+        if (name) {
+            const r = Math.floor(Math.random()*150 + 100);
+            const g = Math.floor(Math.random()*150 + 100);
+            const b = Math.floor(Math.random()*150 + 100);
+            const val = state.addLabel(name, { r, g, b });
+            if (val !== null) state.setActiveLabel(val);
+        }
+    });
+
     for (const [val, label] of state.labels) {
       if (val === 0) continue; // Skip background label in toggles
       const row = document.createElement('div');

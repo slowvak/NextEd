@@ -134,6 +134,9 @@ export class FourPanelLayout {
     this.panels.axial.render();
     this.panels.coronal.render();
     this.panels.sagittal.render();
+    this.panels.axial._updateCursor();
+    this.panels.coronal._updateCursor();
+    this.panels.sagittal._updateCursor();
   }
 
   /**

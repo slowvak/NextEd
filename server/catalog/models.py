@@ -18,6 +18,8 @@ class VolumeMetadata(BaseModel):
     modality: str | None = None
     window_center: float | None = None
     window_width: float | None = None
+    data_min: float | None = None
+    data_max: float | None = None
 
 
 class SegmentationMetadata(BaseModel):
