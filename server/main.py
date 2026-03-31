@@ -190,6 +190,8 @@ def _discover_dicom_series(root: Path) -> list[dict]:
             "voxel_spacing": s["voxel_spacing"],
             "dtype": "float32",
             "modality": s.get("modality", "unknown"),
+            "study_instance_uid": s.get("study_uid"),
+            "series_instance_uid": s.get("series_uid"),
         })
     return entries
 
@@ -297,6 +299,8 @@ def _register_entries(entries: list[dict]) -> tuple[
                 voxel_spacing=entry.get("voxel_spacing"),
                 dtype=entry.get("dtype"),
                 modality=entry.get("modality", "unknown"),
+                study_instance_uid=entry.get("study_instance_uid"),
+                series_instance_uid=entry.get("series_instance_uid"),
             )
 
             register_volume(vol_id, meta, entry["path"], entry["format"])

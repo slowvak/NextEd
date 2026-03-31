@@ -20,6 +20,8 @@ class VolumeMetadata(BaseModel):
     window_width: float | None = None
     data_min: float | None = None
     data_max: float | None = None
+    study_instance_uid: str | None = None
+    series_instance_uid: str | None = None
 
 
 class SegmentationMetadata(BaseModel):

@@ -87,6 +87,7 @@ def discover_dicom_series(root: Path) -> list[dict]:
             continue
 
         if uid not in series_map:
+            study_uid = str(getattr(ds, "StudyInstanceUID", "")).strip()
             study_desc = str(getattr(ds, "StudyDescription", "")).strip()
             series_desc = str(getattr(ds, "SeriesDescription", "")).strip()
             if study_desc and series_desc:
@@ -106,6 +107,7 @@ def discover_dicom_series(root: Path) -> list[dict]:
 
             series_map[uid] = {
                 "series_uid": uid,
+                "study_uid": study_uid,
                 "name": name,
                 "files": [],
                 "modality": modality,
