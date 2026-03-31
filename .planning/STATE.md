@@ -1,30 +1,32 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Phase complete — ready for verification
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-03-29T16:09:46.469Z"
+milestone: v2.0
+milestone_name: Image Server Architecture
+status: Defining requirements
+stopped_at: Milestone v2.0 started
+last_updated: "2026-03-30T00:00:00.000Z"
 progress:
-  total_phases: 5
-  completed_phases: 3
-  total_plans: 13
-  completed_plans: 10
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-24)
+See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Researchers and radiologists can view and segment medical image volumes entirely in the browser with tools comparable to ITK-SNAP's core workflow.
-**Current focus:** Phase 04 — editing-tools-save
+**Current focus:** Milestone v2.0 — Image Server Architecture
 
 ## Current Position
 
-Phase: 04 (editing-tools-save) — EXECUTING
-Plan: 4 of 4
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-30 — Milestone v2.0 started
 
 ## Performance Metrics
 
@@ -34,27 +36,6 @@ Plan: 4 of 4
 - Average duration: -
 - Total execution time: 0 hours
 
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: -
-- Trend: -
-
-*Updated after each plan completion*
-| Phase 02 P03 | 366s | 2 tasks | 10 files |
-| Phase 03 P01 | 10 min | 2 tasks | 6 files |
-| Phase 03 P02 | 15 min | 2 tasks | 9 files |
-| Phase 03 P03 | 10 min | 2 tasks | 6 files |
-| Phase 04 P01 | 10 min | 4 tasks | 6 files |
-| Phase 04 P02 | 1 min | 3 tasks | 3 files |
-| Phase 04 P03 | 1 min | 3 tasks | 3 files |
-| Phase 04 P04 | 1 min | 2 tasks | 2 files |
-
 ## Accumulated Context
 
 ### Decisions
@@ -62,9 +43,8 @@ Plan: 4 of 4
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
--
-
-- [Phase 02]: canvasToVoxel exported as standalone for testability; computeWLDrag uses width/300 sensitivity; setPreset separate from setWindowLevel
+- v1.0 phases 1-4 complete: server pipeline, core viewer, segmentation display, editing tools all built
+- Research flag: Phase 5 DICOM-SEG export via highdicom — now addressed as part of v2.0 format-aware storage
 
 ### Pending Todos
 
@@ -72,11 +52,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- Research flag: Phase 5 DICOM-SEG export via highdicom has sparse documentation; research recommended before Phase 5 planning.
-- Research flag: Phase 5 region grow progress reporting pattern (FastAPI SSE/streaming) worth verifying before implementation.
+None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T16:09:46.464Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-03-30
+Stopped at: Milestone v2.0 started
 Resume file: None

@@ -8,45 +8,45 @@ A web-based medical image viewer and segmentation editor for researchers and rad
 
 Researchers and radiologists can view and segment medical image volumes entirely in the browser — no desktop install, no file transfer friction — with tools comparable to ITK-SNAP's core workflow.
 
+## Current Milestone: v2.0 Image Server Architecture
+
+**Goal:** Restructure NextEd into a folder-monitoring image server with DICOMweb API and a decoupled viewer client, with format-aware segmentation storage.
+
+**Target features:**
+- Continuous folder monitoring (watchdog) with auto-discovery of new DICOM/NIfTI volumes
+- DICOMweb WADO-RS endpoint for DICOM volumes, binary stream for NIfTI
+- Unified volume list API with study/series hierarchy for DICOM
+- WebSocket event stream for real-time volume catalog updates
+- Format-aware segmentation storage: DICOM-SEG (via highdicom) for DICOM sources, NIfTI for NIfTI sources
+- Versioned API (v1) with clean separation between server and viewer
+
 ## Requirements
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Server catalogs NIfTI and DICOM files from a folder tree — v1.0 Phase 1
+- ✓ DICOM files grouped into volumes by series_instance_uid — v1.0 Phase 1
+- ✓ Server exposes volume metadata and loads full volume data on demand — v1.0 Phase 1
+- ✓ 4-panel viewer with axial/coronal/sagittal views, slice navigation, crosshairs — v1.0 Phase 2
+- ✓ Window/level adjustment, auto W/L, CT presets — v1.0 Phase 2
+- ✓ Segmentation overlay with per-label colors, label management — v1.0 Phase 3
+- ✓ Paintbrush, eraser, undo, multi-slice painting, Save As — v1.0 Phase 4
 
 ### Active
 
-- [ ] Server catalogs NIfTI (.nii, .nii.gz) and DICOM files from a folder tree on startup
-- [ ] DICOM files grouped into volumes by series_instance_uid
-- [ ] Server exposes volume metadata: path, filename, X/Y/Z dimensions, voxel spacing, file date
-- [ ] DICOM volumes also expose Study Description and Series Description
-- [ ] Server loads and serves full volume data on demand (not at catalog time)
-- [ ] Web client shows list of available volumes from server
-- [ ] Clicking a volume shows additional metadata (DICOM: Study/Series Description; NIfTI: file date)
-- [ ] User can open a volume as the "Main" image
-- [ ] After opening, prompt for associated segmentation file with auto-detection of `_segmentation` naming
-- [ ] 4-panel viewer: axial (upper-left), coronal (upper-right), sagittal (lower-left), blank (lower-right)
-- [ ] Each view starts at the center slice of its dimension
-- [ ] Slice navigation via slider on each view
-- [ ] Single-view mode toggle (A/C/S buttons) with + button to return to 4-panel
-- [ ] Full volume held in browser memory; slices rendered client-side
-- [ ] Segmentation overlay with per-label integer value, text name, and color — all user-editable via double-click
-- [ ] Labels start as Label1, Label2, etc.; changing an integer value updates all mask pixels with the old value
-- [ ] User-selectable overlay transparency (0-100 slider)
-- [ ] Object/label dropdown with "add object" button; default is lowest unused value, user-overridable
-- [ ] Paintbrush tool: paints on current slice, with slider for multi-slice painting (n slices)
-- [ ] Eraser: right mouse button acts as paintbrush eraser
-- [ ] Rectangle and oval ROI tools; shift+draw applies Otsu threshold within ROI
-- [ ] Otsu "on" class = the bitmask value (0 or 1) with fewest members on the ROI outline
-- [ ] Region grow tool: global, single-click seeded, remembers previous parameters, OK to confirm
-- [ ] Min/max pixel value range slider constraining which voxel values can be painted
-- [ ] Window/level adjustment via ctrl+drag (up=brighter, down=darker, right=wider, left=narrower)
-- [ ] W/L presets: Brain (0–80), Bone (-1000 to +2000), Lung (-1000 to 0), Abd (-100 to +350)
-- [ ] Modality detection from NIfTI header / DICOM tags; show presets only when appropriate (CT vs MR)
-- [ ] Auto W/L on open: 5th–95th percentile histogram values as initial min/max
-- [ ] 3 levels of undo (Ctrl-Z)
-- [ ] Save As only — suggest loaded segmentation name, else `<basename>_seg.nii.gz`
-- [ ] NIfTI sources save as .nii.gz; DICOM sources prompt for .nii.gz or DICOM-SEG
+- [ ] Folder watcher continuously monitors configured paths for new/removed DICOM and NIfTI volumes
+- [ ] New volumes are auto-discovered and added to catalog without server restart
+- [ ] Removed volumes are detected and removed from catalog
+- [ ] DICOMweb WADO-RS endpoint serves DICOM pixel data per PS3.18 standard
+- [ ] Binary stream endpoint serves NIfTI volumes as Float32Array with metadata headers
+- [ ] Unified volume list API returns both DICOM and NIfTI volumes with format-specific metadata
+- [ ] WebSocket event stream pushes volume_added/volume_removed/segmentation_added events to clients
+- [ ] Client volume list updates reactively via WebSocket without page reload
+- [ ] DICOM segmentations saved as DICOM-SEG format via highdicom
+- [ ] NIfTI segmentations saved as _seg.nii.gz (existing behavior)
+- [ ] Format selection is automatic based on parent volume format
+- [ ] All API endpoints versioned under /api/v1/ prefix
+- [ ] Client migrated to consume new versioned API endpoints
 
 ### Out of Scope
 
@@ -78,11 +78,15 @@ Researchers and radiologists can view and segment medical image volumes entirely
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Full volume in browser memory | Fast slice scrolling without server round-trips | — Pending |
-| Server catalogs only, loads on demand | Most studies have many series but user opens one | — Pending |
-| Python backend + JS frontend split | Python for medical image I/O (pydicom, nibabel); JS for interactive canvas | — Pending |
-| Save As only (no in-place save) | Safety — researchers don't want to accidentally overwrite source data | — Pending |
-| 2D tools only for v1 | Keeps scope manageable; 3D tools are a natural v2 addition | — Pending |
+| Full volume in browser memory | Fast slice scrolling without server round-trips | ✓ Good |
+| Server catalogs only, loads on demand | Most studies have many series but user opens one | ✓ Good |
+| Python backend + JS frontend split | Python for medical image I/O (pydicom, nibabel); JS for interactive canvas | ✓ Good |
+| Save As only (no in-place save) | Safety — researchers don't want to accidentally overwrite source data | ✓ Good |
+| 2D tools only for v1 | Keeps scope manageable; 3D tools are a natural v2 addition | ✓ Good |
+| DICOMweb WADO-RS for DICOM volumes | Standard interoperability; other DICOM viewers can consume the API | — Pending |
+| Watchdog for folder monitoring | Cross-platform (macOS FSEvents, Linux inotify); well-maintained library | — Pending |
+| Format-aware seg storage | DICOM-SEG for DICOM sources preserves round-trip compatibility with other tools | — Pending |
+| WebSocket for catalog events | Push-based updates; more efficient than polling for file system changes | — Pending |
 
 ## Evolution
 
@@ -102,4 +106,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after initialization*
+*Last updated: 2026-03-30 after milestone v2.0 start*
