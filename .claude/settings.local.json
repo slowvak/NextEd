@@ -32,7 +32,8 @@
       "Skill(gsd:debug)",
       "Bash(uv run:*)",
       "Bash(npm:*)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Skill(gsd:new-milestone)"
     ]
   }
 }
