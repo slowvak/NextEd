@@ -84,7 +84,7 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
 
     // Load saved labels from cache
     try {
-      const savedLabels = await fetch(`/api/volumes/${volume.id}/labels`).then(r => r.json());
+      const savedLabels = await fetch(`/api/v1/volumes/${volume.id}/labels`).then(r => r.json());
       if (Array.isArray(savedLabels) && savedLabels.length > 0) {
         for (const lb of savedLabels) {
           if (lb.value && lb.value !== 0) {
@@ -110,7 +110,7 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
         if (val === 0) continue;
         labels.push({ value: val, name: lb.name, color: lb.color });
       }
-      fetch(`/api/volumes/${volume.id}/labels`, {
+      fetch(`/api/v1/volumes/${volume.id}/labels`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(labels),
@@ -284,7 +284,7 @@ function _setupToolPanel(toolPanel, state, metadata) {
       confirmBtn.textContent = 'Saving...';
       confirmBtn.disabled = true;
       
-      fetch('/api/volumes/' + metadata.id + '/segmentations?filename=' + encodeURIComponent(filename), {
+      fetch('/api/v1/volumes/' + metadata.id + '/segmentations?filename=' + encodeURIComponent(filename), {
         method: 'POST',
         body: state.segVolume,
         headers: { 'Content-Type': 'application/octet-stream' }

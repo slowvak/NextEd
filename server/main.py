@@ -20,7 +20,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.api.volumes import router as volumes_router, register_volume
@@ -94,7 +94,7 @@ def _find_companion_segmentations(volume_path: Path) -> list[tuple[Path, list[di
 _cache_path: Path | None = None  # Set in main(), used by label endpoints
 
 
-@app.get("/api/volumes", response_model=list[VolumeMetadata])
+@app.get("/api/v1/volumes", response_model=list[VolumeMetadata])
 async def list_volumes():
     return _catalog
 
@@ -121,7 +121,7 @@ def _write_cache(cache: dict):
         print(f"Warning: Could not write cache: {e}")
 
 
-@app.get("/api/volumes/{volume_id}/labels")
+@app.get("/api/v1/volumes/{volume_id}/labels")
 async def get_labels(volume_id: str):
     """Return saved label definitions (name, color) for a volume."""
     cache = _read_cache()
@@ -129,7 +129,7 @@ async def get_labels(volume_id: str):
     return labels
 
 
-@app.put("/api/volumes/{volume_id}/labels")
+@app.put("/api/v1/volumes/{volume_id}/labels")
 async def put_labels(volume_id: str, labels: list[dict]):
     """Save label definitions (name, value, color) for a volume."""
     cache = _read_cache()
@@ -138,6 +138,20 @@ async def put_labels(volume_id: str, labels: list[dict]):
     cache["labels"][volume_id] = labels
     _write_cache(cache)
     return {"ok": True}
+
+
+@app.get("/api/v1/debug/volumes/{volume_id}/paths")
+async def debug_volume_paths(volume_id: str):
+    """Debug endpoint to verify DICOM file paths are retained."""
+    from server.api.volumes import _path_registry
+    if volume_id not in _path_registry:
+        raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
+    path, fmt = _path_registry[volume_id]
+    if fmt == "dicom_series":
+        import json as _json
+        files = _json.loads(path)
+        return {"format": fmt, "file_count": len(files), "files": files}
+    return {"format": fmt, "path": path}
 
 
 # --- Volume entry: unified representation for discovered volumes ---

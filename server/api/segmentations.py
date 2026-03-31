@@ -12,7 +12,7 @@ from pathlib import Path
 from server.catalog.models import SegmentationMetadata
 from server.loaders.nifti_loader import load_nifti_segmentation
 
-router = APIRouter(prefix="/api", tags=["segmentations"])
+router = APIRouter(prefix="/api/v1", tags=["segmentations"])
 
 # In-memory segmentation cache (seg_id -> (data, metadata))
 _seg_data_cache: dict[str, tuple] = {}

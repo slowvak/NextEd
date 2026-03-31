@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from server.catalog.models import VolumeMetadata
 from server.loaders.nifti_loader import load_nifti_volume
 
-router = APIRouter(prefix="/api/volumes", tags=["volumes"])
+router = APIRouter(prefix="/api/v1/volumes", tags=["volumes"])
 
 # In-memory volume cache: volume_id -> (data_array, loader_metadata)
 # Populated lazily when a volume is first opened.
