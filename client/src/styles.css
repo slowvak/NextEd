@@ -144,6 +144,11 @@ body {
   gap: 8px;
 }
 
+.tool-section.compact {
+  padding: 8px 10px;
+  gap: 4px;
+}
+
 .detail-panel {
   flex: 1;
   background: #1e1e1e;
@@ -523,4 +528,88 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
+}
+
+/* -- Compact unified panel styles -- */
+
+.compact-back-btn {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 8px 8px 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: #555;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.compact-back-btn:hover {
+  background: #e8e8e8;
+  color: #1e1e1e;
+}
+
+.compact-btn {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #fff;
+  font-size: 12px;
+  flex: 1;
+}
+
+.compact-btn.save-btn {
+  background: #4a9eff;
+  color: #fff;
+  font-weight: bold;
+  border: none;
+}
+
+.compact-btn.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.compact-wl-readout {
+  font-size: 11px;
+  color: #888;
+  padding: 2px 10px 4px;
+}
+
+/* Compact preset overrides */
+.compact-presets {
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 4px;
+}
+
+.compact-presets .preset-heading {
+  padding: 6px 10px 2px;
+  font-size: 11px;
+}
+
+.compact-presets .preset-btn {
+  display: inline-block;
+  width: auto;
+  margin: 2px 2px 2px 10px;
+  padding: 2px 10px;
+  font-size: 11px;
+  background: #e8e8e8;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: #1e1e1e;
+}
+
+.compact-presets .preset-btn:hover {
+  background: #ddd;
+}
+
+.compact-presets .preset-btn.active {
+  background: #4a9eff;
+  color: #fff;
+  border-color: #4a9eff;
 }

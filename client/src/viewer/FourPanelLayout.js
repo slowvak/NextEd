@@ -94,7 +94,7 @@ export class FourPanelLayout {
       }
     }
 
-    this.panels[axis].toggleBtn.textContent = '+';
+    this.panels[axis].toggleBtn.textContent = '4';
     this.panels[axis].toggleBtn.classList.add('return-btn');
     this.panels[axis].updateDisplaySize();
     this.panels[axis].render();

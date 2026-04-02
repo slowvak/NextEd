@@ -148,11 +148,9 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
     currentLayout = new FourPanelLayout({ container: detailPanel, state });
     currentLayout.setVolume(float32Volume, dims, spacing);
 
-    // Transition sidebar to viewer mode (D-06, D-07)
-    _setupViewerSidebar(sidebar, metadata, state, detailPanel);
-    
-    // Set up editing tool panel
-    _setupToolPanel(toolPanel, state, metadata);
+    // Hide sidebar, set up unified tool panel
+    sidebar.style.display = 'none';
+    _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel);
     toolPanel.style.display = 'flex';
 
   } catch (err) {
@@ -165,11 +163,8 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
   }
 }
 
-function _setupViewerSidebar(sidebar, metadata, state, detailPanel) {
-  // Save original sidebar content for back navigation
-  const originalContent = sidebar.innerHTML;
-
-  sidebar.innerHTML = '';
+function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
+  toolPanel.innerHTML = '';
 
   const handleKeydown = (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -180,10 +175,10 @@ function _setupViewerSidebar(sidebar, metadata, state, detailPanel) {
   };
   document.addEventListener('keydown', handleKeydown);
 
-  // Back button (D-07)
+  // Back button
   const backBtn = document.createElement('button');
-  backBtn.className = 'sidebar-back-btn';
-  backBtn.textContent = '\u2190 Back to volumes';
+  backBtn.className = 'compact-back-btn';
+  backBtn.textContent = '\u2190 Back to Volumes';
   backBtn.addEventListener('click', () => {
     document.removeEventListener('keydown', handleKeydown);
     if (currentLayout) {
@@ -191,82 +186,33 @@ function _setupViewerSidebar(sidebar, metadata, state, detailPanel) {
       currentLayout = null;
     }
     detailPanel.classList.remove('viewer-mode');
-    
-    const toolPanel = document.querySelector('.tool-panel');
-    if (toolPanel) toolPanel.style.display = 'none';
-
-    sidebar.innerHTML = originalContent;
-    // Re-initialize the app to restore event handlers
+    toolPanel.style.display = 'none';
+    sidebar.style.display = '';
     init();
   });
-  sidebar.appendChild(backBtn);
+  toolPanel.appendChild(backBtn);
 
-  // Volume name
-  const nameEl = document.createElement('div');
-  nameEl.className = 'sidebar-volume-name';
-  nameEl.textContent = metadata.name || metadata.filename || 'Volume';
-  sidebar.appendChild(nameEl);
-
-  // Volume metadata summary
-  const metaEl = document.createElement('div');
-  metaEl.className = 'sidebar-volume-meta';
-  const dims = metadata.dimensions;
-  const spacing = metadata.voxel_spacing;
-  metaEl.innerHTML = `${dims[0]} &times; ${dims[1]} &times; ${dims[2]}<br>` +
-    (spacing ? `${spacing[0].toFixed(2)} &times; ${spacing[1].toFixed(2)} &times; ${spacing[2].toFixed(2)} mm` : '') +
-    (metadata.modality ? `<br>${metadata.modality}` : '');
-  sidebar.appendChild(metaEl);
-
-  // Pixel value readout — shows raw voxel intensity at cursor (hover)
-  const pixelReadout = document.createElement('div');
-  pixelReadout.className = 'sidebar-pixel-readout';
-  pixelReadout.textContent = 'Hover over image to see pixel value';
-  const updatePixelReadout = (val) => {
-    if (val === null || val === undefined) {
-      pixelReadout.textContent = '\u2014';
-    } else {
-      // Always format as a number with appropriate precision.
-      // Avoid Number.isInteger() — float32 values like 0.0 and 1.0 pass
-      // isInteger() but are genuine floats, not integer-typed data.
-      // Use one decimal place for values >= 10 (CT HU range), three for
-      // small float ranges (e.g. normalized 0–1 MRI data).
-      const absVal = Math.abs(val);
-      let formatted;
-      if (absVal >= 10 || absVal === 0) {
-        formatted = val.toFixed(1);
-      } else {
-        formatted = val.toFixed(3);
-      }
-      pixelReadout.textContent = `Pixel: ${formatted}`;
-    }
-  };
-  state.subscribeCursorValue(updatePixelReadout);
-  sidebar.appendChild(pixelReadout);
-
-  // W/L presets (visible only for CT per WLVL-04)
+  // W/L presets (compact)
   const presetBar = createPresetBar(state);
-  sidebar.appendChild(presetBar);
+  presetBar.classList.add('compact-presets');
+  toolPanel.appendChild(presetBar);
 
-  // W/L readout
+  // W/L readout (inline)
   const wlReadout = document.createElement('div');
-  wlReadout.className = 'sidebar-wl-readout';
+  wlReadout.className = 'compact-wl-readout';
   const updateWL = () => {
-    wlReadout.innerHTML = `<span>W: ${Math.round(state.windowWidth)}</span><span>L: ${Math.round(state.windowCenter)}</span>`;
+    wlReadout.textContent = `W: ${Math.round(state.windowWidth)}  L: ${Math.round(state.windowCenter)}`;
   };
   updateWL();
   state.subscribe(updateWL);
-  sidebar.appendChild(wlReadout);
-}
-
-function _setupToolPanel(toolPanel, state, metadata) {
-  toolPanel.innerHTML = '<div class="tool-heading">Editing Tools</div>';
+  toolPanel.appendChild(wlReadout);
   
   // Save Action
   const saveSec = document.createElement('div');
-  saveSec.className = 'tool-section';
+  saveSec.className = 'tool-section compact';
   const saveBtn = document.createElement('button');
-  saveBtn.textContent = '💾 Save Segmentation As...';
-  saveBtn.style.cssText = 'padding:8px;border:none;border-radius:4px;cursor:pointer;background:#4a9eff;color:#fff;font-weight:bold;';
+  saveBtn.textContent = '💾 Save As...';
+  saveBtn.className = 'compact-btn save-btn';
   
   const showSaveModal = () => {
     const overlay = document.createElement('div');
@@ -329,14 +275,14 @@ function _setupToolPanel(toolPanel, state, metadata) {
 
   // Tool selection
   const toolSec = document.createElement('div');
-  toolSec.className = 'tool-section';
+  toolSec.className = 'tool-section compact';
   toolSec.style.flexDirection = 'row';
   toolSec.style.gap = '4px';
   toolSec.innerHTML = `
-    <button class="tool-btn" data-tool="crosshair" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;">⌖</button>
-    <button class="tool-btn" data-tool="paint" title="Paint" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;">🖌</button>
-    <button class="tool-btn" data-tool="region-grow" title="Region Grow" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;">✨</button>
-    <button class="tool-btn" data-tool="erase" title="Erase" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;">▱</button>
+    <button class="tool-btn compact-btn" data-tool="crosshair">⌖</button>
+    <button class="tool-btn compact-btn" data-tool="paint" title="Paint">🖌</button>
+    <button class="tool-btn compact-btn" data-tool="region-grow" title="Region Grow">✨</button>
+    <button class="tool-btn compact-btn" data-tool="erase" title="Erase">▱</button>
   `;
   toolPanel.appendChild(toolSec);
 
@@ -363,32 +309,35 @@ function _setupToolPanel(toolPanel, state, metadata) {
   state.subscribe(updateActiveTool);
   updateActiveTool();
 
-  // Undo button
+  // Action buttons row (Undo, Refine, Propagate)
+  const actionRow = document.createElement('div');
+  actionRow.className = 'tool-section compact';
+  actionRow.style.flexDirection = 'row';
+  actionRow.style.gap = '4px';
+  actionRow.style.flexWrap = 'wrap';
+
   const undoBtn = document.createElement('button');
+  undoBtn.className = 'compact-btn action-btn';
   undoBtn.title = 'Undo (Ctrl+Z)';
   undoBtn.textContent = '↶ Undo';
-  undoBtn.style.cssText = 'padding:6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff;margin-top:8px;width:100%; font-size:14px;';
-  
+
   const updateUndoState = () => {
     undoBtn.disabled = state.undoStack.length === 0;
     undoBtn.style.opacity = undoBtn.disabled ? '0.5' : '1';
   };
   state.subscribe(updateUndoState);
   updateUndoState();
-
   undoBtn.addEventListener('click', () => state.undo());
-  toolPanel.insertBefore(undoBtn, toolSec.nextSibling);
 
-  // Refine Contour button
   const refineBtn = document.createElement('button');
+  refineBtn.className = 'compact-btn action-btn';
   refineBtn.title = 'Refine Contour — snap label boundary to image edges';
-  refineBtn.style.cssText = 'padding:6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff;margin-top:4px;width:100%;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;';
   const refineIcon = document.createElement('img');
   refineIcon.src = '/refine-contour-icon.png';
-  refineIcon.alt = 'Refine Contour';
-  refineIcon.style.cssText = 'width:20px;height:16px;object-fit:contain;';
+  refineIcon.alt = '';
+  refineIcon.style.cssText = 'width:14px;height:12px;object-fit:contain;vertical-align:middle;margin-right:2px;';
   refineBtn.appendChild(refineIcon);
-  refineBtn.appendChild(document.createTextNode('Refine Contour'));
+  refineBtn.appendChild(document.createTextNode('Refine'));
 
   refineBtn.addEventListener('click', () => {
     if (!state.segVolume || state.activeLabel === 0) {
@@ -411,16 +360,116 @@ function _setupToolPanel(toolPanel, state, metadata) {
     state.notify();
   });
 
-  toolPanel.insertBefore(refineBtn, undoBtn.nextSibling);
+  const propagateBtn = document.createElement('button');
+  propagateBtn.className = 'compact-btn action-btn';
+  propagateBtn.title = 'Copy labels from adjacent slice(s) and refine';
+  propagateBtn.textContent = '⇅ Propagate';
+
+  propagateBtn.addEventListener('click', () => {
+    if (!state.segVolume || state.activeLabel === 0) {
+      alert('No active label selected.');
+      return;
+    }
+    const [dimX, dimY, dimZ] = state.dims;
+    const sliceSize = dimX * dimY;
+    const sliceZ = state.cursor[2];
+    const volOffset = sliceZ * sliceSize;
+
+    const hasAbove = sliceZ > 0;
+    const hasBelow = sliceZ < dimZ - 1;
+    if (!hasAbove && !hasBelow) {
+      alert('No adjacent slices available.');
+      return;
+    }
+
+    // Build undo diff for current slice
+    const diff = { indices: [], oldValues: [] };
+
+    // Read adjacent slices — check which actually have labels
+    const aboveOffset = hasAbove ? (sliceZ - 1) * sliceSize : -1;
+    const belowOffset = hasBelow ? (sliceZ + 1) * sliceSize : -1;
+
+    let aboveHasLabels = false, belowHasLabels = false;
+    if (hasAbove) {
+      for (let i = 0; i < sliceSize; i++) {
+        if (state.segVolume[aboveOffset + i] !== 0) { aboveHasLabels = true; break; }
+      }
+    }
+    if (hasBelow) {
+      for (let i = 0; i < sliceSize; i++) {
+        if (state.segVolume[belowOffset + i] !== 0) { belowHasLabels = true; break; }
+      }
+    }
+
+    if (!aboveHasLabels && !belowHasLabels) {
+      alert('No labels on adjacent slices.');
+      return;
+    }
+
+    const useBoth = aboveHasLabels && belowHasLabels;
+
+    for (let i = 0; i < sliceSize; i++) {
+      const volIdx = volOffset + i;
+      const oldVal = state.segVolume[volIdx];
+      let newVal;
+
+      if (useBoth) {
+        // AND logic: agree → use label, disagree → 0
+        const above = state.segVolume[aboveOffset + i];
+        const below = state.segVolume[belowOffset + i];
+        newVal = (above === below) ? above : 0;
+      } else if (aboveHasLabels) {
+        newVal = state.segVolume[aboveOffset + i];
+      } else {
+        newVal = state.segVolume[belowOffset + i];
+      }
+
+      if (newVal !== oldVal) {
+        diff.indices.push(volIdx);
+        diff.oldValues.push(oldVal);
+        state.segVolume[volIdx] = newVal;
+      }
+    }
+
+    if (diff.indices.length > 0) {
+      state.pushUndo(diff);
+    }
+
+    // Now refine each label present on this slice
+    const labelsOnSlice = new Set();
+    for (let i = 0; i < sliceSize; i++) {
+      const v = state.segVolume[volOffset + i];
+      if (v !== 0) labelsOnSlice.add(v);
+    }
+
+    for (const labelVal of labelsOnSlice) {
+      const refineDiff = refineContourAxial(
+        currentLayout.panels.axial.volume,
+        state.segVolume,
+        state.dims,
+        sliceZ,
+        labelVal
+      );
+      if (refineDiff) {
+        state.pushUndo(refineDiff);
+      }
+    }
+
+    state.notify();
+  });
+
+  actionRow.appendChild(undoBtn);
+  actionRow.appendChild(refineBtn);
+  actionRow.appendChild(propagateBtn);
+  toolPanel.appendChild(actionRow);
 
   // Settings section
   const settingsSec = document.createElement('div');
-  settingsSec.className = 'tool-section';
+  settingsSec.className = 'tool-section compact';
   settingsSec.innerHTML = `
-    <label class="detail-label">Brush Radius: <span id="brush-rad-val">${state.brushRadius}</span> px</label>
+    <label class="detail-label">Brush: <span id="brush-rad-val">${state.brushRadius}</span>px</label>
     <input type="range" id="brush-radius" min="1" max="20" step="1" value="${state.brushRadius}">
-    
-    <label class="detail-label" style="margin-top:8px;">Multi-Slice Depth: <span id="multi-slice-val">${state.multiSlice}</span></label>
+    <label class="detail-label">Depth: <span id="multi-slice-val">${state.multiSlice}</span></label>
     <input type="range" id="multi-slice" min="1" max="21" step="2" value="${state.multiSlice}">
   `;
   toolPanel.appendChild(settingsSec);
@@ -443,7 +492,7 @@ function _setupToolPanel(toolPanel, state, metadata) {
 
   // Constraints section
   const constrSec = document.createElement('div');
-  constrSec.className = 'tool-section';
+  constrSec.className = 'tool-section compact';
   constrSec.innerHTML = `
     <label class="detail-label">Intensity Limits (Min / Max)</label>
     <div style="display:flex; gap:8px;">
@@ -463,7 +512,7 @@ function _setupToolPanel(toolPanel, state, metadata) {
 
   // Region Grow Settings section (hidden by default)
   const rgSec = document.createElement('div');
-  rgSec.className = 'tool-section';
+  rgSec.className = 'tool-section compact';
   rgSec.style.display = 'none';
   rgSec.innerHTML = `
     <label class="detail-label">Region Grow Range</label>
@@ -562,7 +611,7 @@ function _setupToolPanel(toolPanel, state, metadata) {
 
   // Overlay opacity slider
   const opacitySec = document.createElement('div');
-  opacitySec.className = 'tool-section';
+  opacitySec.className = 'tool-section compact';
   opacitySec.innerHTML = `
     <label class="detail-label">Label Overlay Opacity: <span id="opacity-val">${Math.round(state.overlayOpacity * 100)}%</span></label>
     <input type="range" id="overlay-opacity" min="0" max="100" step="5" value="${Math.round(state.overlayOpacity * 100)}">
@@ -579,7 +628,7 @@ function _setupToolPanel(toolPanel, state, metadata) {
 
   // Labels section
   const labelsSec = document.createElement('div');
-  labelsSec.className = 'tool-section';
+  labelsSec.className = 'tool-section compact';
   labelsSec.style.flex = '1';
   labelsSec.style.overflowY = 'auto';
   toolPanel.appendChild(labelsSec);
