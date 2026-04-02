@@ -6,6 +6,7 @@ import { fetchVolumes, fetchVolumeMetadata, fetchVolumeData } from './api.js';
 import { ViewerState } from './viewer/ViewerState.js';
 import { FourPanelLayout } from './viewer/FourPanelLayout.js';
 import { createPresetBar } from './ui/presetBar.js';
+import { refineContourAxial } from './viewer/contourRefiner.js';
 
 let currentVolume = null;
 let currentLayout = null;
@@ -377,6 +378,40 @@ function _setupToolPanel(toolPanel, state, metadata) {
 
   undoBtn.addEventListener('click', () => state.undo());
   toolPanel.insertBefore(undoBtn, toolSec.nextSibling);
+
+  // Refine Contour button
+  const refineBtn = document.createElement('button');
+  refineBtn.title = 'Refine Contour — snap label boundary to image edges';
+  refineBtn.style.cssText = 'padding:6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff;margin-top:4px;width:100%;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;';
+  const refineIcon = document.createElement('img');
+  refineIcon.src = '/refine-contour-icon.png';
+  refineIcon.alt = 'Refine Contour';
+  refineIcon.style.cssText = 'width:20px;height:16px;object-fit:contain;';
+  refineBtn.appendChild(refineIcon);
+  refineBtn.appendChild(document.createTextNode('Refine Contour'));
+
+  refineBtn.addEventListener('click', () => {
+    if (!state.segVolume || state.activeLabel === 0) {
+      alert('No active label selected.');
+      return;
+    }
+    const sliceZ = state.cursor[2];
+    const diff = refineContourAxial(
+      currentLayout.panels.axial.volume,
+      state.segVolume,
+      state.dims,
+      sliceZ,
+      state.activeLabel
+    );
+    if (!diff) {
+      alert('No pixels with selected label on this slice.');
+      return;
+    }
+    state.pushUndo(diff);
+    state.notify();
+  });
+
+  toolPanel.insertBefore(refineBtn, undoBtn.nextSibling);
 
   // Settings section
   const settingsSec = document.createElement('div');
