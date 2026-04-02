@@ -258,9 +258,7 @@ body {
   height: 100%;
 }
 
-.blank-panel {
-  background: #000000;
-}
+/* Blank panel removed — oblique view fills the 4th quadrant */
 
 .panel-label-bar {
   height: 28px;
@@ -508,9 +506,7 @@ body {
   grid-row: 1 / -1;
 }
 
-.viewer-grid.single-view .blank-panel {
-  display: none;
-}
+/* blank-panel class no longer used — oblique panel fills the 4th quadrant */
 
 .panel-toggle-btn.return-btn {
   background: #4a9eff;

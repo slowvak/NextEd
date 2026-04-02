@@ -3,6 +3,7 @@
  * sagittal (LL), blank (LR) panels. Supports single-view toggle.
  */
 import { ViewerPanel } from './ViewerPanel.js';
+import { ObliquePanel } from './ObliquePanel.js';
 
 const AXES = ['axial', 'coronal', 'sagittal'];
 const TOGGLE_LETTERS = { axial: 'A', coronal: 'C', sagittal: 'S' };
@@ -45,14 +46,16 @@ export class FourPanelLayout {
     this.panels.sagittal = new ViewerPanel({ container: sagittalDiv, axis: 'sagittal', state: this.state });
     this.panelContainers.sagittal = sagittalDiv;
 
-    // Blank (lower-right)
-    this.blankDiv = document.createElement('div');
-    this.blankDiv.className = 'viewer-panel-container blank-panel';
+    // Oblique (lower-right)
+    const obliqueDiv = document.createElement('div');
+    obliqueDiv.className = 'viewer-panel-container';
+    this.panels.oblique = new ObliquePanel({ container: obliqueDiv, state: this.state });
+    this.panelContainers.oblique = obliqueDiv;
 
     this.grid.appendChild(axialDiv);
     this.grid.appendChild(coronalDiv);
     this.grid.appendChild(sagittalDiv);
-    this.grid.appendChild(this.blankDiv);
+    this.grid.appendChild(obliqueDiv);
 
     this.container.appendChild(this.grid);
 
@@ -61,18 +64,16 @@ export class FourPanelLayout {
   }
 
   _wireToggleButtons() {
-    for (const axis of AXES) {
+    const allAxes = [...AXES, 'oblique'];
+    for (const axis of allAxes) {
       const panel = this.panels[axis];
       panel.toggleBtn.addEventListener('click', () => {
         if (this.state.singleView === axis) {
-          // Already in single-view for this axis -- return to 4-panel
           this._exitSingleView();
         } else if (this.state.singleView) {
-          // Switch from one single-view to another
           this._exitSingleView();
           this._enterSingleView(axis);
         } else {
-          // Enter single-view
           this._enterSingleView(axis);
         }
       });
@@ -83,8 +84,8 @@ export class FourPanelLayout {
     this.state.singleView = axis;
     this.grid.classList.add('single-view');
 
-    // Hide all panels except the active one
-    for (const a of AXES) {
+    const allAxes = [...AXES, 'oblique'];
+    for (const a of allAxes) {
       const container = this.panelContainers[a];
       if (a === axis) {
         container.classList.add('active');
@@ -92,14 +93,9 @@ export class FourPanelLayout {
         container.style.display = 'none';
       }
     }
-    // Hide blank panel
-    this.blankDiv.style.display = 'none';
 
-    // Change button text to "+"
     this.panels[axis].toggleBtn.textContent = '+';
     this.panels[axis].toggleBtn.classList.add('return-btn');
-
-    // Trigger resize for the expanded panel
     this.panels[axis].updateDisplaySize();
     this.panels[axis].render();
   }
@@ -109,22 +105,20 @@ export class FourPanelLayout {
     this.state.singleView = null;
     this.grid.classList.remove('single-view');
 
-    // Show all panels
-    for (const a of AXES) {
+    const allAxes = [...AXES, 'oblique'];
+    const letters = { ...TOGGLE_LETTERS, oblique: 'O' };
+    for (const a of allAxes) {
       const container = this.panelContainers[a];
       container.classList.remove('active');
       container.style.display = '';
     }
-    this.blankDiv.style.display = '';
 
-    // Restore button text
     if (prevAxis) {
-      this.panels[prevAxis].toggleBtn.textContent = TOGGLE_LETTERS[prevAxis];
+      this.panels[prevAxis].toggleBtn.textContent = letters[prevAxis];
       this.panels[prevAxis].toggleBtn.classList.remove('return-btn');
     }
 
-    // Trigger resize for all panels
-    for (const a of AXES) {
+    for (const a of allAxes) {
       this.panels[a].updateDisplaySize();
       this.panels[a].render();
     }
@@ -134,9 +128,11 @@ export class FourPanelLayout {
     this.panels.axial.render();
     this.panels.coronal.render();
     this.panels.sagittal.render();
+    this.panels.oblique.render();
     this.panels.axial._updateCursor();
     this.panels.coronal._updateCursor();
     this.panels.sagittal._updateCursor();
+    this.panels.oblique._updateCursor();
   }
 
   /**
@@ -149,6 +145,7 @@ export class FourPanelLayout {
     this.panels.axial.setVolume(volume, dims, spacing);
     this.panels.coronal.setVolume(volume, dims, spacing);
     this.panels.sagittal.setVolume(volume, dims, spacing);
+    this.panels.oblique.setVolume(volume, dims, spacing);
   }
 
   destroy() {
@@ -156,6 +153,7 @@ export class FourPanelLayout {
     this.panels.axial.destroy();
     this.panels.coronal.destroy();
     this.panels.sagittal.destroy();
+    this.panels.oblique.destroy();
     if (this.grid.parentNode) {
       this.grid.parentNode.removeChild(this.grid);
     }

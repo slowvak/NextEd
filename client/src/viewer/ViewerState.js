@@ -58,6 +58,10 @@ export class ViewerState {
     this.colorLUT = null;           // Uint8Array(768) — built from labels
     this.undoStack = [];            // Array of diffs { indices: [], oldValues: [] }
 
+    // Oblique state
+    this.obliqueTilt = 0;           // Radians, tilt away from axial plane
+    this.obliqueAzimuth = 0;        // Radians, azimuth of tilt axis in axial plane
+
     // Region Grow state
     this.regionGrowSeed = null;     // [x, y, z]
     this.regionGrowMean = null;
@@ -145,7 +149,11 @@ export class ViewerState {
     this.segDims = segDims;
     this.labels = discoverLabels(segVolume, apiLabels);
     this.colorLUT = buildColorLUT(this.labels);
+    // Auto-select first non-background label if any exist
     this.activeLabel = 0;
+    for (const [val] of this.labels) {
+      if (val !== 0) { this.activeLabel = val; break; }
+    }
     this.notify();
   }
 
@@ -180,6 +188,16 @@ export class ViewerState {
   setPaintConstraints(min, max) {
     this.paintConstraintMin = min;
     this.paintConstraintMax = max;
+    this.notify();
+  }
+
+  setObliqueTilt(tilt) {
+    this.obliqueTilt = tilt;
+    this.notify();
+  }
+
+  setObliqueAzimuth(azimuth) {
+    this.obliqueAzimuth = azimuth;
     this.notify();
   }
 
@@ -280,7 +298,11 @@ export class ViewerState {
    */
   notify() {
     for (const fn of this.listeners) {
-      fn(this);
+      try {
+        fn(this);
+      } catch (err) {
+        console.error('[ViewerState] Listener threw:', err);
+      }
     }
   }
 }

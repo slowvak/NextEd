@@ -100,6 +100,16 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
         }
         const { buildColorLUT } = await import('./viewer/overlayBlender.js');
         state.colorLUT = buildColorLUT(state.labels);
+        // Auto-select first non-background label
+        for (const [val] of state.labels) {
+          if (val !== 0) { state.activeLabel = val; break; }
+        }
+        // Create empty segVolume so paint doesn't re-prompt for existing labels
+        if (!state.segVolume) {
+          const [dx, dy, dz] = state.dims;
+          state.segVolume = new Uint8Array(dx * dy * dz);
+          state.segDims = [...state.dims];
+        }
       }
     } catch (e) {
       console.warn('[NextEd] Could not load saved labels:', e);

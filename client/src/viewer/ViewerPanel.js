@@ -226,6 +226,45 @@ export class ViewerPanel {
     this.canvas.addEventListener('mousedown', (e) => {
       if (!this.volume) return;
 
+      // Check for oblique rotation handle hit
+      if (this._obliqueHandles && !e.ctrlKey && !e.metaKey) {
+        const rect = this.canvas.getBoundingClientRect();
+        const cssX = e.clientX - rect.left;
+        const cssY = e.clientY - rect.top;
+        const vx = cssX * (this.canvas.width / this.canvas.clientWidth);
+        const vy = cssY * (this.canvas.height / this.canvas.clientHeight);
+        if (this._hitTestObliqueHandle(vx, vy)) {
+          e.preventDefault();
+          this._isDraggingObliqueHandle = true;
+
+          // Store starting state for delta-based rotation
+          let crossX, crossY;
+          if (this.axis === 'axial') {
+            crossX = this.dims[0] - 1 - this.state.cursor[0];
+            crossY = this.dims[1] - 1 - this.state.cursor[1];
+          } else if (this.axis === 'coronal') {
+            crossX = this.dims[0] - 1 - this.state.cursor[0];
+            crossY = this.dims[2] - 1 - this.state.cursor[2];
+          } else {
+            crossX = this.dims[1] - 1 - this.state.cursor[1];
+            crossY = this.dims[2] - 1 - this.state.cursor[2];
+          }
+          this._dragStartAngle = Math.atan2(vy - crossY, vx - crossX);
+          this._dragStartTilt = this.state.obliqueTilt;
+          this._dragStartAzimuth = this.state.obliqueAzimuth;
+
+          // Sign: which direction does increasing mouse angle rotate tilt?
+          if (this.axis === 'sagittal') {
+            const ca = Math.cos(this.state.obliqueAzimuth);
+            this._dragSign = ca >= 0 ? 1 : -1;
+          } else if (this.axis === 'coronal') {
+            const sa = Math.sin(this.state.obliqueAzimuth);
+            this._dragSign = sa >= 0 ? -1 : 1;
+          }
+          return;
+        }
+      }
+
       if (e.ctrlKey || e.metaKey) {
         // Ctrl+drag W/L
         e.preventDefault();
@@ -235,6 +274,19 @@ export class ViewerPanel {
         this.canvas.style.cursor = 'grab';
       } else if (this.state.activeTool === 'paint' || this.state.activeTool === 'erase') {
         e.preventDefault();
+        // Ensure label/segVolume exist BEFORE starting paint drag.
+        // onLabelRequired shows a blocking prompt() that swallows mouseup,
+        // so after prompting we return — the next click will start painting.
+        if (this.state.activeTool === 'paint') {
+          if (!this.state.segVolume || this.state.activeLabel === 0) {
+            if (typeof this.state.onLabelRequired === 'function') {
+              this.state.onLabelRequired();
+            }
+            return; // Always return after prompt — mouseup is lost
+          }
+        } else if (this.state.activeTool === 'erase') {
+          if (!this.state.segVolume) return;
+        }
         if (this._currentDiff && !this._isPainting) {
           delete this._currentDiff.seen;
           this.state.pushUndo(this._currentDiff);
@@ -254,6 +306,10 @@ export class ViewerPanel {
 
     // Mouse move: update crosshair or W/L during drag
     this._onMouseMove = (e) => {
+      if (this._isDraggingObliqueHandle) {
+        this._handleObliqueRotation(e);
+        return;
+      }
       if (this._isDraggingCrosshair) {
         this._updateCrosshairFromMouse(e);
       } else if (this._isDraggingWL) {
@@ -271,6 +327,7 @@ export class ViewerPanel {
 
     // Mouse up: stop all drags
     this._onMouseUp = () => {
+      this._isDraggingObliqueHandle = false;
       this._isDraggingCrosshair = false;
       if (this._isPainting) {
         this._isPainting = false;
@@ -292,9 +349,10 @@ export class ViewerPanel {
     this.state.subscribe(() => {
         // Commit region grow diff if we switch tools
         if (this.state.activeTool !== 'region-grow' && this._currentDiff && !this._isPainting) {
-            delete this._currentDiff.seen;
-            this.state.pushUndo(this._currentDiff);
-            this._currentDiff = null;
+            const diff = this._currentDiff;
+            this._currentDiff = null; // null BEFORE pushUndo to prevent re-entrancy
+            delete diff.seen;
+            this.state.pushUndo(diff);
         }
     });
 
@@ -379,20 +437,7 @@ export class ViewerPanel {
    * Apply brush stroke to segmentation volume based on active tools and dimensions.
    */
   _applyBrush(e) {
-    if ((!this.state.segVolume && this.state.activeTool === 'paint') || this.state.activeLabel === 0) {
-      if (this.state.activeTool === 'erase') {
-          if (!this.state.segVolume) return; // Erasing nothing is fine
-      } else {
-          if (typeof this.state.onLabelRequired === 'function') {
-            const success = this.state.onLabelRequired();
-            if (!success) return;
-          } else {
-            console.warn('[NextEd] Paint ignored: no label selected.');
-            return;
-          }
-      }
-    }
-    if (!this.state.segVolume) return; // Guard for erase
+    if (!this.state.segVolume) return;
     
     const rect = this.canvas.getBoundingClientRect();
     const cssX = e.clientX - rect.left;
@@ -787,6 +832,9 @@ export class ViewerPanel {
     // Draw crosshair lines AFTER putImageData
     this._drawCrosshairs();
 
+    // Draw oblique intersection line and rotation handles
+    this._drawObliqueLine();
+
     // Update readout and slider
     const maxSlice = this._getMaxSlice();
     this.sliceReadout.textContent = `${sliceIndex}/${maxSlice}`;
@@ -846,6 +894,193 @@ export class ViewerPanel {
     ctx.stroke();
 
     ctx.restore();
+  }
+
+  /**
+   * Update oblique angles from rotation handle drag.
+   * Axial handle controls azimuth; coronal/sagittal handles control tilt.
+   */
+  _handleObliqueRotation(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const cssX = e.clientX - rect.left;
+    const cssY = e.clientY - rect.top;
+    const vx = cssX * (this.canvas.width / this.canvas.clientWidth);
+    const vy = cssY * (this.canvas.height / this.canvas.clientHeight);
+
+    // Cursor position on this canvas
+    let crossX, crossY;
+    if (this.axis === 'axial') {
+      crossX = this.dims[0] - 1 - this.state.cursor[0];
+      crossY = this.dims[1] - 1 - this.state.cursor[1];
+    } else if (this.axis === 'coronal') {
+      crossX = this.dims[0] - 1 - this.state.cursor[0];
+      crossY = this.dims[2] - 1 - this.state.cursor[2];
+    } else {
+      crossX = this.dims[1] - 1 - this.state.cursor[1];
+      crossY = this.dims[2] - 1 - this.state.cursor[2];
+    }
+
+    const currentAngle = Math.atan2(vy - crossY, vx - crossX);
+
+    let delta = currentAngle - this._dragStartAngle;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+
+    if (this.axis === 'axial') {
+      this.state.setObliqueAzimuth(this._dragStartAzimuth + delta);
+    } else {
+      const newTilt = this._dragStartTilt + this._dragSign * delta;
+      this.state.setObliqueTilt(newTilt);
+    }
+  }
+
+  /**
+   * Draw oblique intersection line and rotation handles on this panel.
+   * The oblique plane intersects each orthogonal view in a line through the cursor.
+   */
+  _drawObliqueLine() {
+    if (!this.dims) return;
+    const { obliqueTilt: tilt, obliqueAzimuth: azimuth } = this.state;
+    const ct = Math.cos(tilt), st = Math.sin(tilt);
+    const ca = Math.cos(azimuth), sa = Math.sin(azimuth);
+
+    // CSS-to-canvas scale factors (canvas pixels may not be square on screen)
+    const scaleX = (this.canvas.clientWidth || 1) / this.canvas.width;
+    const scaleY = (this.canvas.clientHeight || 1) / this.canvas.height;
+
+    // Compute line direction on this view's canvas (after radiological flips)
+    let dirX, dirY;
+    if (this.axis === 'axial') {
+      dirX = ca * st;
+      dirY = sa * st;
+    } else if (this.axis === 'coronal') {
+      dirX = ct;
+      dirY = -sa * st;
+    } else {
+      dirX = -ct;
+      dirY = -ca * st;
+    }
+
+    let len = Math.sqrt(dirX * dirX + dirY * dirY);
+    if (len < 0.01) {
+      if (this.axis === 'axial') { dirX = ca; dirY = sa; }
+      else { dirX = 1; dirY = 0; }
+      len = 1;
+    }
+    dirX /= len;
+    dirY /= len;
+
+    // Cursor position on canvas (voxel coords)
+    let crossX, crossY, canvasW, canvasH;
+    if (this.axis === 'axial') {
+      crossX = this.dims[0] - 1 - this.state.cursor[0];
+      crossY = this.dims[1] - 1 - this.state.cursor[1];
+      canvasW = this.dims[0]; canvasH = this.dims[1];
+    } else if (this.axis === 'coronal') {
+      crossX = this.dims[0] - 1 - this.state.cursor[0];
+      crossY = this.dims[2] - 1 - this.state.cursor[2];
+      canvasW = this.dims[0]; canvasH = this.dims[2];
+    } else {
+      crossX = this.dims[1] - 1 - this.state.cursor[1];
+      crossY = this.dims[2] - 1 - this.state.cursor[2];
+      canvasW = this.dims[1]; canvasH = this.dims[2];
+    }
+
+    // Find where line exits canvas bounds
+    let tMax = 1e6, tMin = -1e6;
+    if (dirX > 0.001) {
+      tMax = Math.min(tMax, (canvasW - 1 - crossX) / dirX);
+      tMin = Math.max(tMin, -crossX / dirX);
+    } else if (dirX < -0.001) {
+      tMax = Math.min(tMax, -crossX / dirX);
+      tMin = Math.max(tMin, (canvasW - 1 - crossX) / dirX);
+    }
+    if (dirY > 0.001) {
+      tMax = Math.min(tMax, (canvasH - 1 - crossY) / dirY);
+      tMin = Math.max(tMin, -crossY / dirY);
+    } else if (dirY < -0.001) {
+      tMax = Math.min(tMax, -crossY / dirY);
+      tMin = Math.max(tMin, (canvasH - 1 - crossY) / dirY);
+    }
+
+    const ctx = this.ctx;
+    ctx.save();
+
+    const absSt = Math.abs(st);
+    ctx.globalAlpha = 0.8;
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 1;
+    if (absSt <= 0.01) ctx.setLineDash([4, 4]);
+
+    ctx.beginPath();
+    ctx.moveTo(crossX + tMin * dirX + 0.5, crossY + tMin * dirY + 0.5);
+    ctx.lineTo(crossX + tMax * dirX + 0.5, crossY + tMax * dirY + 0.5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Handle placement: fixed CSS-pixel inset from canvas edge
+    const HANDLE_CSS_RADIUS = 8;  // CSS pixels
+    const HANDLE_CSS_INSET = 14;  // CSS pixels from edge
+
+    // Convert CSS-pixel inset to canvas-voxel distance along the line
+    // The line direction (dirX, dirY) in canvas voxels maps to CSS pixels:
+    //   css_len_per_t = sqrt((dirX*scaleX)^2 + (dirY*scaleY)^2)
+    const cssSpeed = Math.sqrt((dirX * scaleX) ** 2 + (dirY * scaleY) ** 2) || 1;
+    const insetT = HANDLE_CSS_INSET / cssSpeed;
+
+    const h1t = tMin + insetT;
+    const h2t = tMax - insetT;
+
+    {
+      this._obliqueHandles = [
+        { x: crossX + h1t * dirX, y: crossY + h1t * dirY },
+        { x: crossX + h2t * dirX, y: crossY + h2t * dirY },
+      ];
+
+      // Draw handles as circles that appear round on screen (ellipses in canvas space)
+      const rxCanvas = HANDLE_CSS_RADIUS / scaleX;
+      const ryCanvas = HANDLE_CSS_RADIUS / scaleY;
+
+      ctx.globalAlpha = 0.9;
+      for (const h of this._obliqueHandles) {
+        // Filled ellipse background
+        ctx.beginPath();
+        ctx.ellipse(h.x + 0.5, h.y + 0.5, rxCanvas, ryCanvas, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 0, 255, 0.4)';
+        ctx.fill();
+        ctx.strokeStyle = '#ff00ff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Curved arrow inside (also elliptical)
+        const irx = rxCanvas * 0.5, iry = ryCanvas * 0.5;
+        ctx.beginPath();
+        ctx.ellipse(h.x + 0.5, h.y + 0.5, irx, iry, 0, -1.0, 2.0);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Check if a canvas-voxel position hits a rotation handle.
+   * Uses elliptical hit area that corresponds to a circle in CSS-pixel space.
+   */
+  _hitTestObliqueHandle(voxelX, voxelY) {
+    if (!this._obliqueHandles) return false;
+    const scaleX = (this.canvas.clientWidth || 1) / this.canvas.width;
+    const scaleY = (this.canvas.clientHeight || 1) / this.canvas.height;
+    const HIT_CSS = 16; // CSS-pixel hit radius
+    const hitRx = HIT_CSS / scaleX;
+    const hitRy = HIT_CSS / scaleY;
+    for (const h of this._obliqueHandles) {
+      const dx = voxelX - h.x, dy = voxelY - h.y;
+      if ((dx / hitRx) ** 2 + (dy / hitRy) ** 2 <= 1) return true;
+    }
+    return false;
   }
 
   /**
