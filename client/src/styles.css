@@ -613,3 +613,74 @@ input[type="number"] {
   color: #fff;
   border-color: #4a9eff;
 }
+
+/* -- Task mode styles -- */
+
+.task-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #2a3a4a;
+  border-bottom: 2px solid #4a9eff;
+  color: #e0e0e0;
+  font-size: 13px;
+  flex-wrap: wrap;
+  min-height: 40px;
+}
+
+.task-prompt {
+  flex: 1;
+  font-weight: 600;
+  min-width: 200px;
+}
+
+.task-qc-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-qc-controls select {
+  padding: 4px 8px;
+  background: #1e1e1e;
+  color: #e0e0e0;
+  border: 1px solid #4a9eff;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.task-text-input {
+  padding: 4px 8px;
+  background: #1e1e1e;
+  color: #e0e0e0;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  font-size: 13px;
+  min-width: 250px;
+}
+
+.task-text-input:focus {
+  border-color: #4a9eff;
+  outline: none;
+}
+
+.task-submit-btn {
+  padding: 6px 16px;
+  background: #4a9eff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.task-submit-btn:hover {
+  background: #3a8aee;
+}
+
+.task-submit-btn.submitting {
+  opacity: 0.6;
+  pointer-events: none;
+}

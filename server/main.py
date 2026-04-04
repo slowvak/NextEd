@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from server.api.volumes import router as volumes_router, register_volume
 from server.api.segmentations import router as segmentations_router
 from server.api.ai import router as ai_router, set_models_dir
+from server.api.task import router as task_router
 from server.catalog.models import VolumeMetadata, SegmentationMetadata
 
 app = FastAPI(title="NextEd Image Server")
@@ -48,6 +49,10 @@ app.add_middleware(
 app.include_router(volumes_router)
 app.include_router(segmentations_router)
 app.include_router(ai_router)
+app.include_router(task_router)
+
+from server.api.config import router as config_router
+app.include_router(config_router)
 
 # Catalog of discovered volumes (populated at startup)
 _catalog: list[VolumeMetadata] = []
@@ -380,26 +385,37 @@ def _load_from_cache(cached_volumes: list[dict]):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python main.py <path> [<path> ...]")
-        print("  <path> can be a NIfTI file, DICOM directory, or directory to scan")
-        sys.exit(1)
+    from server.api.config import get_config_data
+    config = get_config_data()
 
     paths = sys.argv[1:]
+    if not paths and config.get("source_directory"):
+        paths = [config["source_directory"]]
+        
+    if not paths:
+        print("Warning: No paths provided via CLI and no source_directory configured.")
+        print("Server will start empty. You can set the source directory in Preferences.")
+
 
     # Determine cache location
     global _cache_path
-    cache_dir = Path(paths[0]).expanduser().resolve()
-    if cache_dir.is_file():
-        cache_dir = cache_dir.parent
-    cache_path = cache_dir / _CACHE_FILENAME
+    if paths:
+        cache_dir = Path(paths[0]).expanduser().resolve()
+        if cache_dir.is_file():
+            cache_dir = cache_dir.parent
+        cache_path = cache_dir / _CACHE_FILENAME
+    else:
+        cache_path = Path(_CACHE_FILENAME) # local dir fallback
     _cache_path = cache_path
 
     # Set up AI models directory
     models_dir = Path(__file__).resolve().parent.parent / "models"
     models_dir.mkdir(exist_ok=True)
     set_models_dir(models_dir)
-    print(f"AI models config: {models_dir / 'ai-models.json'}")
+    # The ai models are now managed via the unified config API.
+    # We leave set_models_dir purely for any directory artifacts if needed,
+    # but the config will drive the inference server logic.
+    print("AI config expects unified config.json")
 
     t0 = time.time()
     print("Scanning for volumes...")
@@ -407,31 +423,30 @@ def main():
 
     if not entries:
         print("No volumes found in provided paths")
-        sys.exit(1)
-
-    print(f"Discovered {len(entries)} volume(s) in {time.time() - t0:.1f}s")
-
-    cache_key = _compute_cache_key(entries)
-    cached = _load_cache(cache_path, cache_key)
-
-    if cached is not None:
-        print(f"Loading {len(cached)} volume(s) from cache...")
-        t1 = time.time()
-        cat, seg_cat, _ = _load_from_cache(cached)
-        _catalog.clear()
-        _catalog.extend(cat)
-        _segmentation_catalog.update(seg_cat)
-        print(f"Loaded {len(_catalog)} volume(s) from cache in {time.time() - t1:.2f}s")
     else:
-        print("Registering volumes...")
-        t1 = time.time()
-        cat, seg_cat, path_reg = _register_entries(entries)
-        _catalog.clear()
-        _catalog.extend(cat)
-        _segmentation_catalog.update(seg_cat)
-        print(f"Registered {len(_catalog)} volume(s) in {time.time() - t1:.1f}s")
+        print(f"Discovered {len(entries)} volume(s) in {time.time() - t0:.1f}s")
 
-        _save_cache(cache_path, cache_key, _catalog, _segmentation_catalog, path_reg)
+        cache_key = _compute_cache_key(entries)
+        cached = _load_cache(cache_path, cache_key)
+
+        if cached is not None:
+            print(f"Loading {len(cached)} volume(s) from cache...")
+            t1 = time.time()
+            cat, seg_cat, _ = _load_from_cache(cached)
+            _catalog.clear()
+            _catalog.extend(cat)
+            _segmentation_catalog.update(seg_cat)
+            print(f"Loaded {len(_catalog)} volume(s) from cache in {time.time() - t1:.2f}s")
+        else:
+            print("Registering volumes...")
+            t1 = time.time()
+            cat, seg_cat, path_reg = _register_entries(entries)
+            _catalog.clear()
+            _catalog.extend(cat)
+            _segmentation_catalog.update(seg_cat)
+            print(f"Registered {len(_catalog)} volume(s) in {time.time() - t1:.1f}s")
+
+            _save_cache(cache_path, cache_key, _catalog, _segmentation_catalog, path_reg)
 
     print(f"\n{len(_catalog)} volume(s) ready. Starting server on http://localhost:8050")
     print("Volume data will be loaded on demand when opened in the viewer.")

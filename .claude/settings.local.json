@@ -34,8 +34,13 @@
       "Bash(npm:*)",
       "Bash(npx jest:*)",
       "Skill(gsd:new-milestone)",
-      "Bash(git rebase:*)",
-      "Bash(GIT_EDITOR=true git rebase --continue)"
+      "Bash(git checkout:*)",
+      "Bash(npx vite:*)",
+      "mcp__browser-tools__getConsoleErrors",
+      "Bash(uv sync:*)",
+      "Bash(git pull:*)",
+      "Bash(git push:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

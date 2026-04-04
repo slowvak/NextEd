@@ -1,3 +1,4 @@
+import { appConfig } from '../configStore.js';
 import { getColorForLabel, hexToRgb } from './colorPalette.js';
 
 export function discoverLabels(segVolume, apiLabels = []) {
@@ -19,14 +20,14 @@ export function discoverLabels(segVolume, apiLabels = []) {
     const meta = metaMap.get(val);
     if (meta) {
       labels.set(val, {
-        name: meta.name || `Label ${val}`,
+        name: meta.name || appConfig.default_labels?.[val] || `Label ${val}`,
         value: val,
         color: meta.color ? hexToRgb(meta.color) : getColorForLabel(val),
         isVisible: true
       });
     } else {
       labels.set(val, {
-        name: `Label ${val}`,
+        name: appConfig.default_labels?.[val] || `Label ${val}`,
         value: val,
         color: getColorForLabel(val),
         isVisible: true

@@ -28,14 +28,10 @@ def set_models_dir(path: Path):
 
 
 def _load_config() -> dict:
-    """Read ai-models.json from the models directory."""
-    if not _models_dir:
-        raise HTTPException(status_code=500, detail="Models directory not configured")
-    config_path = _models_dir / "ai-models.json"
-    if not config_path.exists():
-        return {"server": "", "models": []}
-    with open(config_path) as f:
-        return json.load(f)
+    """Read AI config from the unified config.json."""
+    from server.api.config import get_config_data
+    cfg = get_config_data()
+    return cfg.get("ai", {"server": "", "models": []})
 
 
 @router.get("/models")

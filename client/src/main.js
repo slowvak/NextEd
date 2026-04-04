@@ -7,12 +7,28 @@ import { ViewerState } from './viewer/ViewerState.js';
 import { FourPanelLayout } from './viewer/FourPanelLayout.js';
 import { createPresetBar } from './ui/presetBar.js';
 import { refineContourAxial } from './viewer/contourRefiner.js';
+import { loadAppConfig } from './configStore.js';
+import { openPreferencesModal } from './ui/preferencesModal.js';
+import { getTaskParams, loadVolumeByPath, loadMaskByPath, completeTask, buildTaskUI } from './taskMode.js';
 
 let currentVolume = null;
 let currentLayout = null;
 
 async function init() {
-  const { listContainer, detailPanel, sidebar, toolPanel } = createAppShell();
+  await loadAppConfig();
+
+  // Check for task mode (external workflow integration)
+  const taskParams = getTaskParams();
+  if (taskParams) {
+    return initTaskMode(taskParams);
+  }
+
+  const { listContainer, detailPanel, sidebar, toolPanel, prefsButton } = createAppShell();
+
+  if (prefsButton) {
+    prefsButton.addEventListener('click', openPreferencesModal);
+  }
+
   renderEmptyState(detailPanel);
 
   try {
@@ -36,6 +52,157 @@ async function init() {
     const banner = document.createElement('div');
     banner.className = 'error-banner';
     banner.textContent = `Failed to load volumes: ${err.message}`;
+    detailPanel.appendChild(banner);
+  }
+}
+
+async function initTaskMode(taskParams) {
+  const taskStartTime = Date.now();
+
+  // Build minimal shell — no sidebar, no volume browser
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+
+  const header = document.createElement('header');
+  header.className = 'app-header';
+  const h1 = document.createElement('h1');
+  h1.textContent = 'NextEd';
+  header.appendChild(h1);
+  app.appendChild(header);
+
+  const body = document.createElement('div');
+  body.className = 'app-body';
+
+  const toolPanel = document.createElement('div');
+  toolPanel.className = 'tool-panel';
+  toolPanel.style.display = 'none';
+
+  const detailPanel = document.createElement('main');
+  detailPanel.className = 'detail-panel viewer-mode';
+
+  body.appendChild(toolPanel);
+  body.appendChild(detailPanel);
+  app.appendChild(body);
+
+  // Show loading
+  detailPanel.innerHTML = '<div class="empty-state"><h2>Loading task...</h2><p>Fetching volume data</p></div>';
+
+  try {
+    // Load volume by path
+    const metadata = await loadVolumeByPath(taskParams.volume);
+    const volumeId = metadata.id;
+
+    // Fetch binary data
+    const arrayBuffer = await fetchVolumeData(volumeId);
+    const float32Volume = new Float32Array(arrayBuffer);
+
+    const dims = metadata.dimensions;
+    const spacing = metadata.voxel_spacing || [1, 1, 1];
+    const modality = metadata.modality || 'unknown';
+    const windowCenter = metadata.window_center ?? 128;
+    const windowWidth = metadata.window_width ?? 256;
+    const dataMin = metadata.data_min ?? null;
+    const dataMax = metadata.data_max ?? null;
+
+    const state = new ViewerState({ dims, spacing, modality, windowCenter, windowWidth, dataMin, dataMax });
+
+    // Load existing mask if specified
+    if (taskParams.mask) {
+      try {
+        const maskData = await loadMaskByPath(taskParams.mask, volumeId);
+        state.segVolume = maskData;
+        state.segDims = [...dims];
+
+        // Auto-detect labels from mask
+        const uniqueVals = new Set(maskData);
+        const { buildColorLUT } = await import('./viewer/overlayBlender.js');
+        const DEFAULT_COLORS = [
+          null,
+          { r: 255, g: 0, b: 0 }, { r: 0, g: 255, b: 0 }, { r: 0, g: 0, b: 255 },
+          { r: 255, g: 255, b: 0 }, { r: 0, g: 255, b: 255 }, { r: 255, g: 0, b: 255 },
+        ];
+        for (const v of uniqueVals) {
+          if (v === 0) continue;
+          state.labels.set(v, {
+            name: `Label ${v}`,
+            value: v,
+            color: v < DEFAULT_COLORS.length ? DEFAULT_COLORS[v] : { r: 200, g: 200, b: 200 },
+            isVisible: true,
+          });
+        }
+        state.colorLUT = buildColorLUT(state.labels);
+        for (const [val] of state.labels) {
+          if (val !== 0) { state.activeLabel = val; break; }
+        }
+      } catch (e) {
+        console.warn('[NextEd] Failed to load task mask:', e);
+      }
+    }
+
+    // Set up viewer
+    detailPanel.innerHTML = '';
+    if (currentLayout) { currentLayout.destroy(); currentLayout = null; }
+    currentLayout = new FourPanelLayout({ container: detailPanel, state });
+    currentLayout.setVolume(float32Volume, dims, spacing);
+
+    // Set up tool panel (edit modes)
+    const isEditMode = taskParams.mode === 'edit' || taskParams.mode === 'edit+qc';
+    if (isEditMode) {
+      // Use a dummy sidebar element (hidden) since _setupToolPanel expects one
+      const dummySidebar = document.createElement('div');
+      _setupToolPanel(toolPanel, state, metadata, dummySidebar, detailPanel);
+      toolPanel.style.display = 'flex';
+    }
+
+    // Build task bar (prompt + QC controls + submit button)
+    const onComplete = async () => {
+      const submitBtn = document.querySelector('.task-submit-btn');
+      if (submitBtn) {
+        submitBtn.classList.add('submitting');
+        submitBtn.textContent = 'Submitting...';
+      }
+
+      try {
+        const result = await completeTask(taskParams, state, volumeId, taskStartTime);
+        console.log('[NextEd] Task completed:', result);
+
+        // Show success
+        const bar = document.querySelector('.task-bar');
+        if (bar) {
+          bar.innerHTML = '<div class="task-prompt" style="color:#6fcf97;">Task completed successfully. You may close this window.</div>';
+        }
+      } catch (err) {
+        console.error('[NextEd] Task completion failed:', err);
+        alert('Failed to complete task: ' + err.message);
+        if (submitBtn) {
+          submitBtn.classList.remove('submitting');
+          submitBtn.textContent = 'Retry';
+        }
+      }
+    };
+
+    buildTaskUI(taskParams, detailPanel, onComplete);
+
+    // Auto-run AI model if specified
+    if (taskParams.aiModel) {
+      try {
+        const runResp = await fetch('/api/v1/ai/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ volume_id: volumeId, model_id: taskParams.aiModel }),
+        });
+        const { job_id } = await runResp.json();
+        console.log(`[NextEd] Auto-running AI model ${taskParams.aiModel}, job: ${job_id}`);
+      } catch (e) {
+        console.warn('[NextEd] Failed to auto-run AI model:', e);
+      }
+    }
+
+  } catch (err) {
+    detailPanel.innerHTML = '';
+    const banner = document.createElement('div');
+    banner.className = 'error-banner';
+    banner.textContent = `Task failed: ${err.message}`;
     detailPanel.appendChild(banner);
   }
 }

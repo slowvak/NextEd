@@ -6,14 +6,19 @@
  * actual data range so the presets produce meaningful contrast.
  */
 
+import { appConfig } from '../configStore.js';
+
 // CT presets defined in Hounsfield Units.
 // Reference CT range: air=-1000, fat=-100, water=0, soft tissue=20-80, bone=700+
-const PRESETS = [
-  { name: 'Brain', center: 40, width: 80 },
-  { name: 'Bone', center: 500, width: 3000 },
-  { name: 'Lung', center: -500, width: 1000 },
-  { name: 'Abd', center: 125, width: 450 },
-];
+function getPresets() {
+  const wl = appConfig.window_level_presets || {};
+  return [
+    { name: 'Brain', center: wl.Brain?.center ?? 40, width: wl.Brain?.width ?? 80 },
+    { name: 'Bone', center: wl.Bone?.center ?? 500, width: wl.Bone?.width ?? 3000 },
+    { name: 'Lung', center: wl.Lung?.center ?? -500, width: wl.Lung?.width ?? 1000 },
+    { name: 'Abd', center: wl.Abd?.center ?? 125, width: wl.Abd?.width ?? 450 },
+  ];
+}
 
 
 /**
@@ -77,8 +82,9 @@ export function createPresetBar(state) {
   container.appendChild(heading);
 
   const buttons = [];
+  const activePresets = getPresets();
 
-  for (const preset of PRESETS) {
+  for (const preset of activePresets) {
     const btn = document.createElement('button');
     btn.className = 'preset-btn';
     btn.textContent = preset.name;

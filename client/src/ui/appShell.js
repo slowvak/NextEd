@@ -20,6 +20,18 @@ export function createAppShell() {
   listContainer.setAttribute('aria-label', 'Available volumes');
   sidebar.appendChild(listContainer);
 
+  const sidebarFooter = document.createElement('div');
+  sidebarFooter.className = 'sidebar-footer';
+  sidebarFooter.style.marginTop = 'auto';
+  sidebarFooter.style.padding = '1rem';
+  
+  const prefsButton = document.createElement('button');
+  prefsButton.className = 'btn btn-secondary';
+  prefsButton.textContent = 'Preferences';
+  prefsButton.style.width = '100%';
+  sidebarFooter.appendChild(prefsButton);
+  sidebar.appendChild(sidebarFooter);
+
   const toolPanel = document.createElement('div');
   toolPanel.className = 'tool-panel';
   toolPanel.style.display = 'none';
@@ -36,5 +48,5 @@ export function createAppShell() {
   app.appendChild(header);
   app.appendChild(body);
 
-  return { listContainer, detailPanel, sidebar, toolPanel };
+  return { listContainer, detailPanel, sidebar, toolPanel, prefsButton };
 }
