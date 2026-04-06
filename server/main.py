@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from server.api.volumes import router as volumes_router, register_volume
 from server.api.segmentations import router as segmentations_router
 from server.api.ai import router as ai_router, set_models_dir
+from server.api.wado import router as wado_router
 from server.catalog.models import VolumeMetadata, SegmentationMetadata
 
 app = FastAPI(title="NextEd Image Server")
@@ -48,6 +49,7 @@ app.add_middleware(
 app.include_router(volumes_router)
 app.include_router(segmentations_router)
 app.include_router(ai_router)
+app.include_router(wado_router)
 
 # Catalog of discovered volumes (populated at startup)
 _catalog: list[VolumeMetadata] = []
