@@ -40,7 +40,25 @@
       "Bash(uv sync:*)",
       "Bash(git pull:*)",
       "Bash(git push:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "WebFetch(domain:gitlab.com)",
+      "Bash(find /Users/bje/repos/fs-workflow-designer -name *user*task* -o -name *widget* -o -name *task*widget*)",
+      "Bash(grep:*)",
+      "Bash(npx acorn:*)",
+      "Bash(find /Users/bje/repos/NextEd -type d -name *workflow* -o -type d -name *data* -o -type d -name *seed*)",
+      "Bash(find /Users/bje/repos/NextEd/server -type f \\\\\\(-name *.json -o -name *.py \\\\\\) ! -path */.venv/* ! -path */node_modules/*)",
+      "Bash(find /Users/bje/repos/NextEd -type f -name *.db -o -name *.sqlite -o -name seed*)",
+      "Bash(find /Users/bje/repos/NextEd -type f \\\\\\(-name *.md -o -name *.txt -o -name *.sql -o -name seed* \\\\\\))",
+      "Bash(find /Users/bje/repos/NextEd/client -type f \\\\\\(-name *.json -o -name *.ts -o -name *.tsx \\\\\\) ! -path */node_modules/*)",
+      "Bash(find /Users/bje/Desktop -type f \\\\\\(-name *DICOM* -o -name *workflow* -o -name *.json -o -name *.bpmn \\\\\\))",
+      "Bash(find /Users/bje/repos/fs-workflow-designer -type f -name *task* \\\\\\(-name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx \\\\\\) ! -path */node_modules/* ! -path */.venv/*)",
+      "Bash(git rm:*)",
+      "Skill(gsd:execute-phase)",
+      "Bash(git fetch:*)",
+      "Bash(uv pip:*)",
+      "Bash(pip install:*)",
+      "Bash(ls:*)",
+      "Bash(cat .planning/phases/06*/06-CONTEXT.md)"
     ]
   }
 }
