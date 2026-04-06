@@ -82,7 +82,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. A WADO-RS retrieve request for a DICOM series returns all instances as a multipart/related response with correct MIME boundaries
   2. A WADO-RS metadata request for a DICOM series returns DICOM tags as JSON per the PS3.18 standard
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 08-01-PLAN.md — WADO-RS router with series retrieve (multipart/related streaming) and metadata (PS3.18 JSON) endpoints, plus test suite
 
 ## Progress
 
@@ -98,4 +100,4 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8
 | 5. Foundation | v2.0 | 0/2 | Not started | - |
 | 6. Folder Monitoring & WebSocket Events | v2.0 | 0/2 | Not started | - |
 | 7. Format-Aware Segmentation Storage | v2.0 | 0/2 | Not started | - |
-| 8. DICOMweb WADO-RS | v2.0 | 0/TBD | Not started | - |
+| 8. DICOMweb WADO-RS | v2.0 | 0/1 | Not started | - |
