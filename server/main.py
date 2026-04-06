@@ -29,6 +29,7 @@ from server.api.segmentations import router as segmentations_router
 from server.api.ai import router as ai_router, set_models_dir
 from server.api.task import router as task_router
 from server.api.ws import ws_router
+from server.api.wado import router as wado_router
 from server.catalog.models import VolumeMetadata, SegmentationMetadata
 from server.watcher.suppress import WatcherSuppressList
 
@@ -82,6 +83,7 @@ app.include_router(segmentations_router)
 app.include_router(ai_router)
 app.include_router(task_router)
 app.include_router(ws_router)
+app.include_router(wado_router)
 
 from server.api.config import router as config_router
 app.include_router(config_router)

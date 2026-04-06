@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Image Server Architecture
-status: Ready to plan
-stopped_at: Phase 8 context gathered
-last_updated: "2026-04-06T14:31:17.321Z"
+status: Ready to execute
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-04-06T18:12:43Z"
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 5
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 1
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Researchers and radiologists can view and segment medical image volumes entirely in the browser with tools comparable to ITK-SNAP's core workflow.
-**Current focus:** Phase 07 — format-aware-segmentation-storage
+**Current focus:** Phase 05 — foundation
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
+Phase: 05 (foundation) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -45,10 +45,7 @@ Recent decisions affecting current work:
 - v2.0 phase order: Foundation -> Monitoring -> DICOM-SEG -> WADO-RS (low risk first, high risk last)
 - DICOM loader must retain file paths (critical for Phase 7 DICOM-SEG and Phase 8 WADO-RS)
 - [Phase 05]: Updated client API paths alongside server versioning to prevent breakage
-- [Phase 06]: Used happy-dom instead of jsdom for vitest DOM tests (Node 25.x ESM compat)
-- [Phase 07]: Used codes.SCT.Tissue as generic DICOM-SEG segment property for minimal valid metadata
-- [Phase 07]: stop_before_pixels=True for source DICOM reads in build_dicom_seg for performance
-- [Phase 07]: Format selection based on _path_registry format field; suppress-before-write pattern for watcher coordination
+- [Phase 08]: WADO-RS uses StreamingResponse with 64KB chunks for multipart/related; PixelData BulkDataURI manually injected since stop_before_pixels omits it
 
 ### Pending Todos
 
@@ -62,6 +59,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-06T14:31:17.305Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-dicomweb-wado-rs/08-CONTEXT.md
+Last session: 2026-04-06T18:12:43Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
