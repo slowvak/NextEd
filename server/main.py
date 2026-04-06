@@ -30,6 +30,10 @@ from server.api.ai import router as ai_router, set_models_dir
 from server.api.task import router as task_router
 from server.api.ws import ws_router
 from server.catalog.models import VolumeMetadata, SegmentationMetadata
+from server.watcher.suppress import WatcherSuppressList
+
+# Module-level suppress list shared between save endpoint and watcher
+suppress_list = WatcherSuppressList(ttl=5.0)
 
 
 @asynccontextmanager
