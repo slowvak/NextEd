@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Image Server Architecture
 status: Ready to execute
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-31T12:36:28.119Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-04-06T18:12:43Z"
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # Project State
@@ -45,6 +45,7 @@ Recent decisions affecting current work:
 - v2.0 phase order: Foundation -> Monitoring -> DICOM-SEG -> WADO-RS (low risk first, high risk last)
 - DICOM loader must retain file paths (critical for Phase 7 DICOM-SEG and Phase 8 WADO-RS)
 - [Phase 05]: Updated client API paths alongside server versioning to prevent breakage
+- [Phase 08]: WADO-RS uses StreamingResponse with 64KB chunks for multipart/related; PixelData BulkDataURI manually injected since stop_before_pixels omits it
 
 ### Pending Todos
 
@@ -58,6 +59,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T12:36:28.113Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-04-06T18:12:43Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
