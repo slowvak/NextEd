@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Image Server Architecture
 status: Ready to plan
-stopped_at: Phase 7 context gathered
-last_updated: "2026-04-06T13:31:15.934Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-04-06T14:13:05.984Z"
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 4
-  completed_plans: 3
+  completed_phases: 2
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -19,11 +19,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Researchers and radiologists can view and segment medical image volumes entirely in the browser with tools comparable to ITK-SNAP's core workflow.
-**Current focus:** Phase 06 — folder-monitoring-websocket-events
+**Current focus:** Phase 07 — format-aware-segmentation-storage
 
 ## Current Position
 
-Phase: 7
+Phase: 8
 Plan: Not started
 
 ## Performance Metrics
@@ -46,6 +46,9 @@ Recent decisions affecting current work:
 - DICOM loader must retain file paths (critical for Phase 7 DICOM-SEG and Phase 8 WADO-RS)
 - [Phase 05]: Updated client API paths alongside server versioning to prevent breakage
 - [Phase 06]: Used happy-dom instead of jsdom for vitest DOM tests (Node 25.x ESM compat)
+- [Phase 07]: Used codes.SCT.Tissue as generic DICOM-SEG segment property for minimal valid metadata
+- [Phase 07]: stop_before_pixels=True for source DICOM reads in build_dicom_seg for performance
+- [Phase 07]: Format selection based on _path_registry format field; suppress-before-write pattern for watcher coordination
 
 ### Pending Todos
 
@@ -59,6 +62,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-06T13:31:15.923Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-format-aware-segmentation-storage/07-CONTEXT.md
+Last session: 2026-04-06T14:07:33.268Z
+Stopped at: Completed 07-02-PLAN.md
+Resume file: None
