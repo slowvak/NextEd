@@ -51,8 +51,8 @@ Requirements for image server architecture redesign. Each maps to roadmap phases
 ### WebSocket Events
 - [ ] **WS-01**: Server pushes volume_added events via WebSocket when new volumes are discovered
 - [ ] **WS-02**: Server pushes volume_removed events via WebSocket when volumes are deleted
-- [ ] **WS-03**: Client volume list updates reactively on WebSocket events without page reload
-- [ ] **WS-04**: Client reconnects automatically with exponential backoff after WebSocket disconnection
+- [x] **WS-03**: Client volume list updates reactively on WebSocket events without page reload
+- [x] **WS-04**: Client reconnects automatically with exponential backoff after WebSocket disconnection
 
 ### DICOMweb
 - [ ] **WADO-01**: WADO-RS endpoint serves all DICOM instances in a series as multipart/related response
@@ -106,8 +106,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WATCH-03 | Phase 6 | Pending |
 | WS-01 | Phase 6 | Pending |
 | WS-02 | Phase 6 | Pending |
-| WS-03 | Phase 6 | Pending |
-| WS-04 | Phase 6 | Pending |
+| WS-03 | Phase 6 | Complete |
+| WS-04 | Phase 6 | Complete |
 | SEG-01 | Phase 7 | Pending |
 | SEG-02 | Phase 7 | Pending |
 | SEG-03 | Phase 7 | Pending |

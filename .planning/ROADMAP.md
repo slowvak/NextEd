@@ -58,8 +58,8 @@ Plans:
   4. User navigates away and returns (or loses network briefly) and the WebSocket reconnects automatically, resuming event delivery
 **Plans**: 2 plans
 Plans:
-- [ ] 06-01-PLAN.md — Server-side watcher (watchdog observer, DICOM debouncer, WebSocket ConnectionManager, lifespan integration, hash-based volume IDs)
-- [ ] 06-02-PLAN.md — Client-side WebSocket client with reconnect, reactive volume list updates, connection status indicator
+- [x] 06-01-PLAN.md — Server-side watcher (watchdog observer, DICOM debouncer, WebSocket ConnectionManager, lifespan integration, hash-based volume IDs)
+- [x] 06-02-PLAN.md — Client-side WebSocket client with reconnect, reactive volume list updates, connection status indicator
 
 ### Phase 7: Format-Aware Segmentation Storage
 **Goal**: Users save segmentations and the correct format is chosen automatically -- DICOM-SEG for DICOM-sourced volumes, NIfTI for NIfTI-sourced volumes
