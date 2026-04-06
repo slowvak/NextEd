@@ -184,6 +184,11 @@ async def process_events(queue: asyncio.Queue, debouncer: DICOMDebouncer) -> Non
         event_type, path = await queue.get()
 
         if event_type == "created":
+            # Check suppress list to ignore self-written files (e.g., DICOM-SEG from save endpoint)
+            from server.main import suppress_list
+            if suppress_list.should_suppress(path):
+                continue
+
             if _is_nifti(path):
                 # Brief delay for partial write guard
                 await asyncio.sleep(0.5)
