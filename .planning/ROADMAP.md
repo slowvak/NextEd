@@ -70,7 +70,10 @@ Plans:
   2. User edits a segmentation on a NIfTI volume, clicks Save, and a _seg.nii.gz file is written (unchanged from v1.0 behavior)
   3. User does not choose the output format -- the server selects it based on the parent volume's source format
   4. User creates labels with arbitrary integer values (e.g., 1, 5, 12) and the DICOM-SEG output contains contiguous segment numbers 1..N with correct label metadata
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 07-01-PLAN.md — DICOM-SEG writer module (highdicom, label remapping, RAS-to-LPS reversal) and watcher suppress list
+- [ ] 07-02-PLAN.md — Format-aware save endpoint branching, watcher suppress integration, and format-selection tests
 
 ### Phase 8: DICOMweb WADO-RS
 **Goal**: DICOM volumes are retrievable via standard DICOMweb WADO-RS endpoints, enabling interoperability with other DICOM viewers
@@ -94,5 +97,5 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8
 | 4. Editing Tools & Save | v1.0 | -/- | Complete | - |
 | 5. Foundation | v2.0 | 0/2 | Not started | - |
 | 6. Folder Monitoring & WebSocket Events | v2.0 | 0/2 | Not started | - |
-| 7. Format-Aware Segmentation Storage | v2.0 | 0/TBD | Not started | - |
+| 7. Format-Aware Segmentation Storage | v2.0 | 0/2 | Not started | - |
 | 8. DICOMweb WADO-RS | v2.0 | 0/TBD | Not started | - |
