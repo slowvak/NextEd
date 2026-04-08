@@ -9,8 +9,9 @@ import { ViewerState } from './viewer/ViewerState.js';
 import { FourPanelLayout } from './viewer/FourPanelLayout.js';
 import { createPresetBar } from './ui/presetBar.js';
 import { refineContourAxial } from './viewer/contourRefiner.js';
-import { loadAppConfig } from './configStore.js';
+import { loadAppConfig, appConfig } from './configStore.js';
 import { openPreferencesModal } from './ui/preferencesModal.js';
+import { showFolderPickerModal } from './ui/folderPickerModal.js';
 import { getTaskParams, loadVolumeByPath, loadMaskByPath, completeTask, buildTaskUI } from './taskMode.js';
 
 let currentVolume = null;
@@ -25,7 +26,40 @@ async function init() {
     return initTaskMode(taskParams);
   }
 
-  const { listContainer, detailPanel, sidebar, toolPanel, prefsButton } = createAppShell();
+  // Show folder picker on first launch (no source directory configured)
+  if (!appConfig.source_directory) {
+    const chosen = await showFolderPickerModal();
+    if (chosen) {
+      // Re-load config so the rest of init sees the updated value, then
+      // trigger page reload as the folder picker has already triggered the server rescan.
+      window.location.reload();
+      return;
+    }
+    // If skipped, continue to show empty volume list
+  }
+
+  const { listContainer, detailPanel, sidebar, toolPanel, prefsButton, openFolderBtn } = createAppShell();
+
+  if (openFolderBtn) {
+    openFolderBtn.addEventListener('click', async () => {
+      const chosen = await showFolderPickerModal();
+      if (chosen) {
+         // Fetch new list of volumes from server and redraw (the modal already rescanned)
+         try {
+           const volumes = await fetchVolumes();
+           renderVolumeList(volumes, listContainer, selectHandler);
+           renderEmptyState(detailPanel);
+           currentVolume = null;
+           if (currentLayout) {
+             currentLayout.destroy();
+             currentLayout = null;
+           }
+         } catch (err) {
+           console.error("Failed to fetch volumes after folder change:", err);
+         }
+      }
+    });
+  }
 
   if (prefsButton) {
     prefsButton.addEventListener('click', openPreferencesModal);

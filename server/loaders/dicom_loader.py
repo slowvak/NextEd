@@ -104,6 +104,8 @@ def discover_dicom_series(root: Path) -> list[dict]:
             cols = int(getattr(ds, "Columns", 0))
             spacing = ([float(v) for v in ds.PixelSpacing]
                        if hasattr(ds, "PixelSpacing") else [1.0, 1.0])
+            orientation = ([float(v) for v in ds.ImageOrientationPatient]
+                           if hasattr(ds, "ImageOrientationPatient") else None)
 
             series_map[uid] = {
                 "series_uid": uid,
@@ -114,8 +116,13 @@ def discover_dicom_series(root: Path) -> list[dict]:
                 "rows": rows,
                 "cols": cols,
                 "voxel_spacing": spacing,
+                "orientation": orientation,
+                "positions": [],
             }
 
+        pos = getattr(ds, "ImagePositionPatient", None)
+        if pos is not None:
+            series_map[uid]["positions"].append([float(v) for v in pos])
         series_map[uid]["files"].append(str(f))
 
     # Convert to list, compute dimensions, filter small series
@@ -129,8 +136,25 @@ def discover_dicom_series(root: Path) -> list[dict]:
         if cols < 5 or rows < 5 or n_slices < 5:
             continue
 
+        # Compute actual Z spacing from ImagePositionPatient along slice normal
+        z_spacing = 1.0
+        orientation = info.get("orientation")
+        positions = info.get("positions", [])
+        if orientation and len(positions) >= 2:
+            row_cosine = np.array(orientation[:3])
+            col_cosine = np.array(orientation[3:6])
+            slice_normal = np.cross(row_cosine, col_cosine)
+            projections = sorted(
+                float(np.dot(np.array(p), slice_normal)) for p in positions
+            )
+            gaps = [abs(projections[i+1] - projections[i])
+                    for i in range(len(projections) - 1)
+                    if abs(projections[i+1] - projections[i]) > 0.01]
+            if gaps:
+                z_spacing = float(np.median(gaps))
+
         info["dimensions"] = [cols, rows, n_slices]
-        info["voxel_spacing"] = info["voxel_spacing"] + [1.0]  # estimate z spacing
+        info["voxel_spacing"] = info["voxel_spacing"] + [z_spacing]
         result.append(info)
 
     return result

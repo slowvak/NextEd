@@ -10,10 +10,26 @@ export function createAppShell() {
 
   const sidebar = document.createElement('nav');
   sidebar.className = 'sidebar';
+  const sidebarHeadingContainer = document.createElement('div');
+  sidebarHeadingContainer.style.display = 'flex';
+  sidebarHeadingContainer.style.justifyContent = 'space-between';
+  sidebarHeadingContainer.style.alignItems = 'center';
+  sidebarHeadingContainer.style.marginBottom = '1rem';
+
   const sidebarHeading = document.createElement('h2');
   sidebarHeading.className = 'sidebar-heading';
   sidebarHeading.textContent = 'Volumes';
-  sidebar.appendChild(sidebarHeading);
+  sidebarHeading.style.margin = '0';
+  
+  const openFolderBtn = document.createElement('button');
+  openFolderBtn.textContent = 'Open Folder';
+  openFolderBtn.className = 'btn btn-secondary';
+  openFolderBtn.style.padding = '4px 8px';
+  openFolderBtn.style.fontSize = '0.85rem';
+
+  sidebarHeadingContainer.appendChild(sidebarHeading);
+  sidebarHeadingContainer.appendChild(openFolderBtn);
+  sidebar.appendChild(sidebarHeadingContainer);
   const listContainer = document.createElement('ul');
   listContainer.className = 'volume-list';
   listContainer.setAttribute('role', 'listbox');
@@ -48,5 +64,5 @@ export function createAppShell() {
   app.appendChild(header);
   app.appendChild(body);
 
-  return { listContainer, detailPanel, sidebar, toolPanel, prefsButton };
+  return { listContainer, detailPanel, sidebar, toolPanel, prefsButton, openFolderBtn };
 }

@@ -277,8 +277,9 @@ export class ViewerPanel {
         // Ensure label/segVolume exist BEFORE starting paint drag.
         // onLabelRequired shows a blocking prompt() that swallows mouseup,
         // so after prompting we return — the next click will start painting.
-        // Label 0 = erase, so only prompt when no labels exist at all.
-        if (!this.state.segVolume && this.state.activeLabel !== 0) {
+        // Prompt when: no segmentation AND (user chose a non-erase label OR no labels exist yet)
+        const hasRealLabels = [...this.state.labels.keys()].some(v => v !== 0);
+        if (!this.state.segVolume && (this.state.activeLabel !== 0 || !hasRealLabels)) {
           if (typeof this.state.onLabelRequired === 'function') {
             this.state.onLabelRequired();
           }
@@ -521,7 +522,8 @@ export class ViewerPanel {
    * Initialize a Region Grow session from a canvas click event.
    */
   _startRegionGrow(e) {
-    if (!this.state.segVolume || this.state.activeLabel === 0) {
+    const hasRealLabels = [...this.state.labels.keys()].some(v => v !== 0);
+    if (!this.state.segVolume || (this.state.activeLabel === 0 && !hasRealLabels)) {
       if (typeof this.state.onLabelRequired === 'function') {
         const success = this.state.onLabelRequired();
         if (!success) return;
@@ -529,6 +531,10 @@ export class ViewerPanel {
         console.warn('[NextEd] Region grow ignored: no active label.');
         return;
       }
+    }
+    if (this.state.activeLabel === 0) {
+      console.warn('[NextEd] Region grow ignored: erase mode active. Select a label first.');
+      return;
     }
     if (!this.volume) return;
 
@@ -676,6 +682,9 @@ export class ViewerPanel {
     }
 
     this._currentDiff = newDiff;
+    if (newDiff.indices.length === 0) {
+      console.warn('[NextEd] Region grow: no voxels matched range [' + regionGrowMin + ', ' + regionGrowMax + '] at seed', this.state.regionGrowSeed);
+    }
     this.state.notify();
   }
 
@@ -769,8 +778,8 @@ export class ViewerPanel {
     const physicalH = sliceH * spV;
     const aspectRatio = physicalW / physicalH;
 
-    // Available display space (container minus label bar and slider)
-    const containerW = this.canvasContainer.clientWidth - 20; // slider width
+    // Use full container dimensions for display sizing
+    const containerW = this.canvasContainer.clientWidth;
     const containerH = this.canvasContainer.clientHeight;
 
     if (containerW <= 0 || containerH <= 0) return;
@@ -779,11 +788,11 @@ export class ViewerPanel {
     const containerAspect = containerW / containerH;
 
     if (aspectRatio > containerAspect) {
-      // Width-constrained
+      // Width-constrained: fit width, compute height
       displayW = containerW;
       displayH = containerW / aspectRatio;
     } else {
-      // Height-constrained
+      // Height-constrained: fit height, compute width
       displayH = containerH;
       displayW = containerH * aspectRatio;
     }

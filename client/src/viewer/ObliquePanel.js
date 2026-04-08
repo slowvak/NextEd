@@ -120,8 +120,10 @@ export class ObliquePanel {
       } else if (this.state.activeTool === 'paint') {
         e.preventDefault();
         // Ensure label/segVolume exist BEFORE starting paint drag.
-        // Label 0 = erase, so only prompt when no labels exist at all.
-        if (!this.state.segVolume && this.state.activeLabel !== 0) {
+        // Prompt when no segmentation exists AND either a non-erase label is active
+        // or no real labels have been created yet (fresh volume).
+        const hasRealLabels = [...this.state.labels.keys()].some(v => v !== 0);
+        if (!this.state.segVolume && (this.state.activeLabel !== 0 || !hasRealLabels)) {
           if (typeof this.state.onLabelRequired === 'function') {
             this.state.onLabelRequired();
           }
@@ -298,12 +300,17 @@ export class ObliquePanel {
   }
 
   _startRegionGrow(e) {
-    if (!this.state.segVolume || this.state.activeLabel === 0) {
+    const hasRealLabels = [...this.state.labels.keys()].some(v => v !== 0);
+    if (!this.state.segVolume || (this.state.activeLabel === 0 && !hasRealLabels)) {
       if (typeof this.state.onLabelRequired === 'function') {
         if (!this.state.onLabelRequired()) return;
       } else {
         return;
       }
+    }
+    if (this.state.activeLabel === 0) {
+      console.warn('[NextEd] Region grow ignored: erase mode active. Select a label first.');
+      return;
     }
     if (!this.volume) return;
 
@@ -406,6 +413,9 @@ export class ObliquePanel {
     }
 
     this._currentDiff = newDiff;
+    if (newDiff.indices.length === 0) {
+      console.warn('[NextEd] Region grow: no voxels matched range [' + regionGrowMin + ', ' + regionGrowMax + '] at seed', this.state.regionGrowSeed);
+    }
     this.state.notify();
   }
 

@@ -266,12 +266,14 @@ def _discover_nifti_volumes(root: Path) -> list[dict]:
         if _SEG_PATTERN.search(nii.name):
             continue
         try:
-            # Read header only without loading data into memory
+            # Read header only without loading data into memory.
+            # Canonicalize to RAS+ so spacing order matches the loader output.
             img = nib.load(str(nii))
-            dims = [int(d) for d in img.shape[:3]]
+            canonical = nib.as_closest_canonical(img)
+            dims = [int(d) for d in canonical.shape[:3]]
             if any(d < _MIN_DIM for d in dims):
                 continue
-            spacing = [float(s) for s in img.header.get_zooms()[:3]]
+            spacing = [float(s) for s in canonical.header.get_zooms()[:3]]
             entries.append({
                 "name": nii.stem.replace(".nii", ""),
                 "path": str(nii),
