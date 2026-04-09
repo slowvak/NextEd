@@ -739,23 +739,19 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   morphRow.appendChild(filterBtn);
   toolPanel.appendChild(morphRow);
 
-  // AI button
+  // AI button — same row style as morphRow
+  const aiRow = document.createElement('div');
+  aiRow.className = 'tool-section compact';
+  aiRow.style.flexDirection = 'row';
+
   const aiBtn = document.createElement('button');
-  aiBtn.className = 'compact-btn';
+  aiBtn.className = 'compact-btn action-btn';
   aiBtn.textContent = '🤖 AI';
   aiBtn.title = 'Run AI model on current volume';
-  aiBtn.style.cssText = 'width:100%;margin-top:4px;padding:4px 8px;font-size:12px;';
+  aiBtn.style.flex = '1';
   aiBtn.addEventListener('click', () => _showAIModelPicker(state, metadata));
-  toolPanel.appendChild(aiBtn);
-
-  // TotalSegmentator button
-  const tsBtn = document.createElement('button');
-  tsBtn.className = 'compact-btn';
-  tsBtn.textContent = 'TotalSegmentator';
-  tsBtn.title = 'Download volume as NIfTI and open TotalSegmentator';
-  tsBtn.style.cssText = 'width:100%;margin-top:4px;padding:4px 8px;font-size:12px;';
-  tsBtn.addEventListener('click', () => _runTotalSegmentator(state, metadata));
-  toolPanel.appendChild(tsBtn);
+  aiRow.appendChild(aiBtn);
+  toolPanel.appendChild(aiRow);
 
   // Settings section
   const settingsSec = document.createElement('div');
@@ -1107,10 +1103,7 @@ async function _showAIModelPicker(state, metadata) {
     return;
   }
 
-  if (!models || models.length === 0) {
-    alert('No AI models configured. Add models to models/ai-models.json');
-    return;
-  }
+  if (!models) models = [];
 
   // Build modal
   const overlay = document.createElement('div');
@@ -1121,6 +1114,15 @@ async function _showAIModelPicker(state, metadata) {
 
   let html = '<h2 style="margin-top:0;font-size:18px;margin-bottom:16px;">Run AI Model</h2>';
   html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+
+  // TotalSegmentator — always present as a built-in option
+  html += `
+    <div class="ai-model-option" data-model-id="__totalsegmentator__"
+         style="padding:12px;border:1px solid #3a3a3a;border-radius:6px;cursor:pointer;transition:background 0.1s;">
+      <div style="font-weight:600;font-size:14px;">TotalSegmentator</div>
+      <div style="font-size:12px;color:#a0a0a0;margin-top:4px;">Download volume as NIfTI and open totalsegmentator.com</div>
+    </div>
+  `;
 
   for (const model of models) {
     const acceptsLabel = model.accepts_labels ? ' (uses existing labels)' : '';
@@ -1154,6 +1156,14 @@ async function _showAIModelPicker(state, metadata) {
     opt.addEventListener('mouseleave', () => { opt.style.background = ''; });
     opt.addEventListener('click', async () => {
       const modelId = opt.getAttribute('data-model-id');
+
+      // TotalSegmentator is a special built-in action
+      if (modelId === '__totalsegmentator__') {
+        close();
+        _runTotalSegmentator(state, metadata);
+        return;
+      }
+
       const model = models.find(m => m.id === modelId);
 
       // Disable all options
