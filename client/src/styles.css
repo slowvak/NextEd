@@ -711,3 +711,68 @@ input[type="number"] {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+/* -- Dual-range slider (Region Grow thresholds) -- */
+.dual-range-wrap {
+  position: relative;
+  height: 20px;
+  margin: 4px 0 2px;
+}
+.dual-range-wrap input[type="range"] {
+  position: absolute;
+  width: 100%;
+  top: 0;
+  left: 0;
+  height: 20px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+.dual-range-wrap input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #4a9eff;
+  border: 2px solid #fff;
+  cursor: pointer;
+  pointer-events: all;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.dual-range-wrap input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #4a9eff;
+  border: 2px solid #fff;
+  cursor: pointer;
+  pointer-events: all;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.dual-range-wrap input[type="range"]::-webkit-slider-runnable-track {
+  height: 0;
+  background: transparent;
+}
+.dual-range-wrap input[type="range"]::-moz-range-track {
+  height: 0;
+  background: transparent;
+}
+.dual-range-track {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.dual-range-fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: #4a9eff;
+  border-radius: 2px;
+}

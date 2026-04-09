@@ -792,74 +792,70 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   maxInput.addEventListener('change', updateConstraints);
 
   // Region Grow Settings section (hidden by default)
+  const rgSlidMin = Math.floor(state.dataMin ?? -1024);
+  const rgSlidMax = Math.ceil(state.dataMax ?? 3000);
+  const rgInitMin = Math.max(rgSlidMin, state.regionGrowMin);
+  const rgInitMax = Math.min(rgSlidMax, state.regionGrowMax);
+
   const rgSec = document.createElement('div');
   rgSec.className = 'tool-section compact';
   rgSec.style.display = 'none';
   rgSec.innerHTML = `
     <label class="detail-label">Region Grow Range</label>
-    <div style="font-size:12px; color:#a0a0a0; margin-bottom:8px;">Target Mean: <span id="rg-mean-val">-</span></div>
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <div style="display:flex; align-items:center; gap:4px;">
-        <span style="width:30px;font-size:12px;">Min:</span>
-        <button id="rg-min-down" style="width:24px;border:1px solid #ccc;background:#f0f0f0;border-radius:4px;cursor:pointer;">-</button>
-        <input type="number" id="rg-min" value="${state.regionGrowMin}" style="flex:1; background:#fff; border:1px solid #ccc; border-radius:4px; padding:4px; text-align:center;">
-        <button id="rg-min-up" style="width:24px;border:1px solid #ccc;background:#f0f0f0;border-radius:4px;cursor:pointer;">+</button>
-      </div>
-      <div style="display:flex; align-items:center; gap:4px;">
-        <span style="width:30px;font-size:12px;">Max:</span>
-        <button id="rg-max-down" style="width:24px;border:1px solid #ccc;background:#f0f0f0;border-radius:4px;cursor:pointer;">-</button>
-        <input type="number" id="rg-max" value="${state.regionGrowMax}" style="flex:1; background:#fff; border:1px solid #ccc; border-radius:4px; padding:4px; text-align:center;">
-        <button id="rg-max-up" style="width:24px;border:1px solid #ccc;background:#f0f0f0;border-radius:4px;cursor:pointer;">+</button>
-      </div>
+    <div style="font-size:11px;color:#888;margin-bottom:6px;">Mean: <span id="rg-mean-val">-</span></div>
+    <div class="dual-range-wrap">
+      <div class="dual-range-track"><div class="dual-range-fill" id="rg-fill"></div></div>
+      <input type="range" id="rg-min-slider" min="${rgSlidMin}" max="${rgSlidMax}" step="1" value="${rgInitMin}">
+      <input type="range" id="rg-max-slider" min="${rgSlidMin}" max="${rgSlidMax}" step="1" value="${rgInitMax}">
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-top:4px;">
+      <span>Min: <b id="rg-min-readout">${rgInitMin}</b></span>
+      <span>Max: <b id="rg-max-readout">${rgInitMax}</b></span>
     </div>
   `;
   toolPanel.appendChild(rgSec);
 
-  const rgMinInput = rgSec.querySelector('#rg-min');
-  const rgMaxInput = rgSec.querySelector('#rg-max');
+  const rgMinSlider = rgSec.querySelector('#rg-min-slider');
+  const rgMaxSlider = rgSec.querySelector('#rg-max-slider');
+  const rgFill = rgSec.querySelector('#rg-fill');
   const rgMeanVal = rgSec.querySelector('#rg-mean-val');
+  const rgMinReadout = rgSec.querySelector('#rg-min-readout');
+  const rgMaxReadout = rgSec.querySelector('#rg-max-readout');
 
-  const updateRGRange = () => {
-    let minVal = parseInt(rgMinInput.value, 10) || 0;
-    let maxVal = parseInt(rgMaxInput.value, 10) || 0;
-    if (minVal > maxVal - 1) minVal = maxVal - 1; // Enforce min <= max - 1
-    
-    // Check if the DOM value differs (in case it was manually entered wrong)
-    if (parseInt(rgMinInput.value, 10) !== minVal) {
-      rgMinInput.value = minVal;
-    }
+  const updateRGFill = () => {
+    const span = rgSlidMax - rgSlidMin;
+    const l = (parseInt(rgMinSlider.value) - rgSlidMin) / span * 100;
+    const r = (parseInt(rgMaxSlider.value) - rgSlidMin) / span * 100;
+    rgFill.style.left = l + '%';
+    rgFill.style.width = (r - l) + '%';
+  };
+  updateRGFill();
 
+  const applyRGChange = () => {
+    const minVal = parseInt(rgMinSlider.value);
+    const maxVal = parseInt(rgMaxSlider.value);
+    rgMinReadout.textContent = minVal;
+    rgMaxReadout.textContent = maxVal;
+    updateRGFill();
     state.setRegionGrowRange(minVal, maxVal);
-    if (state.executeRegionGrow) {
-       state.executeRegionGrow();
-    }
+    if (state.executeRegionGrow) state.executeRegionGrow();
   };
 
-  const enforceStep = (input, delta) => {
-    let val = parseInt(input.value, 10);
-    if (isNaN(val)) return;
-    val += delta;
-    
-    if (input === rgMinInput) {
-        let maxVal = parseInt(rgMaxInput.value, 10) || 0;
-        if (val > maxVal - 1) val = maxVal - 1;
-    } else {
-        let minVal = parseInt(rgMinInput.value, 10) || 0;
-        if (val < minVal + 1) val = minVal + 1;
+  rgMinSlider.addEventListener('input', () => {
+    if (parseInt(rgMinSlider.value) >= parseInt(rgMaxSlider.value)) {
+      rgMinSlider.value = String(parseInt(rgMaxSlider.value) - 1);
     }
-    input.value = val;
-    updateRGRange();
-  };
+    // When min thumb is in upper half, bring it above max thumb for grabbability
+    rgMinSlider.style.zIndex = parseInt(rgMinSlider.value) > (rgSlidMin + rgSlidMax) / 2 ? '5' : '3';
+    applyRGChange();
+  });
 
-  rgSec.querySelector('#rg-min-down').addEventListener('click', () => enforceStep(rgMinInput, -1));
-  rgSec.querySelector('#rg-min-up').addEventListener('click', () => enforceStep(rgMinInput, 1));
-  rgSec.querySelector('#rg-max-down').addEventListener('click', () => enforceStep(rgMaxInput, -1));
-  rgSec.querySelector('#rg-max-up').addEventListener('click', () => enforceStep(rgMaxInput, 1));
-
-  rgMinInput.addEventListener('change', updateRGRange);
-  rgMaxInput.addEventListener('change', updateRGRange);
-  rgMinInput.addEventListener('input', updateRGRange);
-  rgMaxInput.addEventListener('input', updateRGRange);
+  rgMaxSlider.addEventListener('input', () => {
+    if (parseInt(rgMaxSlider.value) <= parseInt(rgMinSlider.value)) {
+      rgMaxSlider.value = String(parseInt(rgMinSlider.value) + 1);
+    }
+    applyRGChange();
+  });
 
   const updateToolPlanes = () => {
     if (state.activeTool === 'region-grow') {
@@ -871,21 +867,22 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     }
 
     if (state.regionGrowMean !== null) {
-      if (state.regionGrowMean % 1 !== 0) {
-        rgMeanVal.textContent = state.regionGrowMean.toFixed(1);
-      } else {
-        rgMeanVal.textContent = state.regionGrowMean;
-      }
+      rgMeanVal.textContent = state.regionGrowMean % 1 !== 0
+        ? state.regionGrowMean.toFixed(1)
+        : state.regionGrowMean;
     } else {
       rgMeanVal.textContent = '-';
     }
-    
-    if (state.regionGrowMin !== parseInt(rgMinInput.value, 10)) {
-        rgMinInput.value = state.regionGrowMin;
+
+    if (state.regionGrowMin !== parseInt(rgMinSlider.value)) {
+      rgMinSlider.value = String(state.regionGrowMin);
+      rgMinReadout.textContent = state.regionGrowMin;
     }
-    if (state.regionGrowMax !== parseInt(rgMaxInput.value, 10)) {
-        rgMaxInput.value = state.regionGrowMax;
+    if (state.regionGrowMax !== parseInt(rgMaxSlider.value)) {
+      rgMaxSlider.value = String(state.regionGrowMax);
+      rgMaxReadout.textContent = state.regionGrowMax;
     }
+    updateRGFill();
   };
   state.subscribe(updateToolPlanes);
   updateToolPlanes();
