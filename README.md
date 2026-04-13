@@ -8,6 +8,7 @@ You can change the selected folder from the Volumes list view by clicking 'Open 
 
 -----  INSTALLATION  -----
 To use this, clone the repo. 
+npm must be installed (e.g. sudo apt-get install npm)
 You will need to get the uv environment running:
    In the main folder, run: uv venv
    Then 'cd server'
