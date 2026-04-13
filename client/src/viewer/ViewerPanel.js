@@ -673,12 +673,12 @@ export class ViewerPanel {
     const startIdx = sz * dimX * dimY + sy * dimX + sx;
     visited[startIdx] = 1;
 
-    // 6-connectivity neighbors
-    const neighbors = [
-        [1, 0, 0], [-1, 0, 0],
-        [0, 1, 0], [0, -1, 0],
-        [0, 0, 1], [0, 0, -1]
-    ];
+    // 4-connectivity in-plane neighbors + depth for multi-slice
+    let neighbors;
+    if (this.axis === 'axial')    neighbors = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+    else if (this.axis === 'coronal')  neighbors = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,1,0],[0,-1,0]];
+    else                               neighbors = [[0,1,0],[0,-1,0],[0,0,1],[0,0,-1],[1,0,0],[-1,0,0]];
+    // First 4 entries are in-plane; last 2 are depth (only used when multiSlice > 1)
 
     while (head < q.length) {
         const [cx, cy, cz] = q[head++];
@@ -686,31 +686,31 @@ export class ViewerPanel {
         const val = this.volume[idx];
 
         // Accept only unlabeled voxels within intensity range
-        if (val >= regionGrowMin && val <= regionGrowMax && this.state.segVolume[idx] === 0) {
-            newDiff.indices.push(idx);
-            newDiff.oldValues.push(this.state.segVolume[idx]);
-            this.state.segVolume[idx] = activeLabel;
-        }
+        if (val < regionGrowMin || val > regionGrowMax || this.state.segVolume[idx] !== 0) continue;
 
-        // Always enqueue neighbors (regardless of acceptance) so grow routes around labeled regions
-        for (const [dx, dy, dz] of neighbors) {
+        newDiff.indices.push(idx);
+        newDiff.oldValues.push(0);
+        this.state.segVolume[idx] = activeLabel;
+
+        // Only expand from accepted voxels — true flood fill, not full-slice scan
+        for (let i = 0; i < neighbors.length; i++) {
+            const [dx, dy, dz] = neighbors[i];
+            // Skip depth neighbors when multiSlice == 1
+            if (i >= 4 && sliceRange === 0) continue;
+
             const nx = cx + dx;
             const ny = cy + dy;
             const nz = cz + dz;
 
-            if (nx >= 0 && nx < dimX && ny >= 0 && ny < dimY && nz >= 0 && nz < dimZ) {
-                let depthOut = false;
-                if (this.axis === 'axial' && (nz < minD || nz > maxD)) depthOut = true;
-                if (this.axis === 'coronal' && (ny < minD || ny > maxD)) depthOut = true;
-                if (this.axis === 'sagittal' && (nx < minD || nx > maxD)) depthOut = true;
+            if (nx < 0 || nx >= dimX || ny < 0 || ny >= dimY || nz < 0 || nz >= dimZ) continue;
+            if (this.axis === 'axial'    && (nz < minD || nz > maxD)) continue;
+            if (this.axis === 'coronal'  && (ny < minD || ny > maxD)) continue;
+            if (this.axis === 'sagittal' && (nx < minD || nx > maxD)) continue;
 
-                if (!depthOut) {
-                    const nIdx = nz * dimX * dimY + ny * dimX + nx;
-                    if (!visited[nIdx]) {
-                        visited[nIdx] = 1;
-                        q.push([nx, ny, nz]);
-                    }
-                }
+            const nIdx = nz * dimX * dimY + ny * dimX + nx;
+            if (!visited[nIdx]) {
+                visited[nIdx] = 1;
+                q.push([nx, ny, nz]);
             }
         }
     }
