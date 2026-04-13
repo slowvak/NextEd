@@ -621,6 +621,10 @@ export class ViewerPanel {
     }
     const stdev = count > 0 ? Math.sqrt(sumSq / count) : 50;
 
+    // Seed pixel's actual intensity — guaranteed to be in the range we set below
+    const seedIdx = targetZ * this.dims[0] * this.dims[1] + targetY * this.dims[0] + targetX;
+    const seedVal = this.volume[seedIdx];
+
     // Save previous diff (if any applied and committed)
     if (this._currentDiff) {
       delete this._currentDiff.seen;
@@ -634,8 +638,12 @@ export class ViewerPanel {
     this.state.regionGrowAxis = this.axis;
     this.state.executeRegionGrow = () => this._applyRegionGrow();
 
-    // Always reset range to mean ± stdev of the seed patch on each click
-    this.state.setRegionGrowRange(Math.round(mean - stdev), Math.round(mean + stdev));
+    // Range = mean ± stdev, but always guaranteed to contain the seed pixel.
+    // Without this, a seed at a tissue boundary (outlier in its 5×5 patch) would
+    // fall outside mean±stdev and the BFS would reject it immediately.
+    const rangeMin = Math.round(Math.min(mean - stdev, seedVal));
+    const rangeMax = Math.round(Math.max(mean + stdev, seedVal));
+    this.state.setRegionGrowRange(rangeMin, rangeMax);
     
     // The apply function reads the latest regionGrowMin/Max from state
     this._applyRegionGrow();
