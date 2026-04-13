@@ -1,16 +1,61 @@
-NextEd is a web-based system for editing medical images (DICOM and Nifti are supported). You select a folder and it will find all the volumes in that folder system (a volume typically maps to a CT or MRI series). All volumes found will then be listed on the left panel. The user may open a volume and it will be displayed as a 4-view (Axial, Coronal, Sagittal, and Oblique). Just one fo these can be displayed by clicking the letter ('A', 'C', 'S') at the upper right corner of the image and in that view, clicking '4' will brin gyou back to the 4 view.
-Scrolling the mouse wheel lets you select the slice and the cross-hairs are updated as you do that.
-THe left panel shows a number of tools. At the upper right corner is  '?' which will display a help window explaining the tools and how to use them.
-Clicking 'Back to Volumes' will bring you back to the list of volumes in the selected folder. 
-You can change the selected folder from the Volumes list view by clicking 'Open Folder'
+# NextEd
 
+**NextEd** is a web-based medical image viewer and segmentation editor for researchers and radiologists. It supports DICOM and NIfTI volumes — no desktop install required.
 
+---
 
------  INSTALLATION  -----
-To use this, clone the repo. 
-npm must be installed (e.g. sudo apt-get install npm)
-You will need to get the uv environment running:
-   In the main folder, run: uv venv
-   Then 'cd server'
-       'uv sync'
-then 'cd ..' to get back into the main folder and './start.sh' to start the system
+## Features
+
+- **Folder-based catalog** — point NextEd at a folder and it discovers all volumes automatically (each volume typically maps to a CT or MRI series)
+- **4-panel viewer** — Axial, Coronal, Sagittal, and Oblique views rendered side-by-side
+- **Single-panel mode** — click `A`, `C`, or `S` in the corner of any panel to expand it; press `4` to return to the 4-panel layout
+- **Synchronized crosshairs** — scroll the mouse wheel to move through slices; crosshairs update across all panels
+- **Segmentation editing** — paint, erase, and label segmentation masks directly in the browser
+- **Built-in help** — click `?` in the toolbar for a full tool reference
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- [uv](https://github.com/astral-sh/uv) — Python package manager
+- [Node.js + npm](https://nodejs.org) — for the frontend build tool
+
+### Installation
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/slowvak/NextEd.git
+cd NextEd
+
+# 2. Set up the Python environment
+uv venv
+cd server
+uv sync
+cd ..
+
+# 3. Install frontend dependencies
+cd client
+npm install
+cd ..
+```
+
+### Running
+
+```bash
+./start.sh
+```
+
+This starts both the FastAPI backend and the Vite dev server. Open your browser to the URL shown in the terminal output.
+
+---
+
+## Usage
+
+1. Click **Open Folder** to select a directory — NextEd will scan it for DICOM and NIfTI volumes
+2. Select a volume from the list on the left panel to open it
+3. Use the toolbar tools to adjust window/level, paint segmentations, and manage labels
+4. Click **Back to Volumes** to return to the volume list
+
+> Click `?` in the upper-right corner for a full description of all tools and keyboard shortcuts.
