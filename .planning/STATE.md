@@ -61,6 +61,7 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260408-dk9 | Add TotalSegmentator button to AI section that uploads current volume to totalsegmentator.com website | 2026-04-08 | 30c717a | [260408-dk9-add-totalsegmentator-button-to-ai-sectio](./quick/260408-dk9-add-totalsegmentator-button-to-ai-sectio/) |
 | 260409-h8h | Fix Region Grow button styling in updateActiveTool to use green tint for inactive state | 2026-04-09 | cc198a6 | [260409-h8h-fix-region-grow-button-styling-in-update](./quick/260409-h8h-fix-region-grow-button-styling-in-update/) |
+| 260413-l5j | Combine Cursor/Paint/Grow2D tool buttons into a single dropdown selector | 2026-04-13 | da07131 | [260413-l5j-combine-the-buttons-for-cursor-paint-reg](./quick/260413-l5j-combine-the-buttons-for-cursor-paint-reg/) |
 
 ### Blockers/Concerns
 
