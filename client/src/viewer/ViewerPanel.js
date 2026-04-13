@@ -647,10 +647,15 @@ export class ViewerPanel {
   _applyRegionGrow() {
     if (!this.state.regionGrowSeed || !this.volume || !this.state.segVolume) return;
     
-    // 1. Revert previous _currentDiff if it exists, so we start fresh from the seed
+    // 1. Revert previous _currentDiff if it exists, so we start fresh from the seed.
+    // Only revert pixels whose current value still matches what the grow wrote —
+    // if another operation (e.g. paint) changed the pixel since, leave it alone.
     if (this._currentDiff) {
       for (let i = 0; i < this._currentDiff.indices.length; i++) {
-        this.state.segVolume[this._currentDiff.indices[i]] = this._currentDiff.oldValues[i];
+        const idx = this._currentDiff.indices[i];
+        if (this.state.segVolume[idx] === this._currentDiff.newValue) {
+          this.state.segVolume[idx] = this._currentDiff.oldValues[i];
+        }
       }
     }
     
@@ -668,7 +673,7 @@ export class ViewerPanel {
     const visited = new Uint8Array(dimX * dimY * dimZ);
     const q = [[sx, sy, sz]];
     let head = 0; // index in q for pseudo-queue
-    const newDiff = { indices: [], oldValues: [] };
+    const newDiff = { indices: [], oldValues: [], newValue: activeLabel };
 
     const startIdx = sz * dimX * dimY + sy * dimX + sx;
     visited[startIdx] = 1;
