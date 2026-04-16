@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+import tempfile
+
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
 import numpy as np
@@ -185,4 +187,33 @@ async def get_segmentation_data(seg_id: str) -> Response:
         content=data.tobytes(),
         media_type="application/octet-stream",
         headers=headers,
+    )
+
+
+@router.post("/volumes/{volume_id}/upload-mask")
+async def upload_mask(volume_id: str, file: UploadFile = File(...)) -> Response:
+    """Accept a NIfTI file upload and return it as uint8 voxel data.
+
+    The file is processed server-side with nibabel (canonicalized to RAS+,
+    cast to uint8) and returned as raw bytes with dimension headers.
+    """
+    suffix = ".nii.gz" if (file.filename or "").endswith(".gz") else ".nii"
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+        data, meta = load_nifti_segmentation(tmp_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read NIfTI file: {e}")
+    finally:
+        import os
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+    return Response(
+        content=data.tobytes(),
+        media_type="application/octet-stream",
+        headers={"X-Volume-Dimensions": ",".join(str(d) for d in meta["dimensions"])},
     )

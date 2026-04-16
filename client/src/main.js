@@ -542,12 +542,74 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   state.subscribe(updateWL);
   toolPanel.appendChild(wlReadout);
   
-  // Save Action
+  // Save / Load mask — toggle based on whether a mask is loaded
   const saveSec = document.createElement('div');
   saveSec.className = 'tool-section compact';
+
   const saveBtn = document.createElement('button');
   saveBtn.textContent = '💾 Save As...';
   saveBtn.className = 'compact-btn save-btn';
+
+  const loadMaskBtn = document.createElement('button');
+  loadMaskBtn.textContent = '📂 Load Label Mask';
+  loadMaskBtn.className = 'compact-btn';
+  loadMaskBtn.addEventListener('click', () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.nii,.nii.gz';
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      loadMaskBtn.textContent = 'Loading...';
+      loadMaskBtn.disabled = true;
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(`/api/v1/volumes/${metadata.id}/upload-mask`, { method: 'POST', body: form });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+          throw new Error(err.detail || 'Upload failed');
+        }
+        const segData = new Uint8Array(await res.arrayBuffer());
+        state.segVolume = segData;
+        state.segDims = [...state.dims];
+        const { buildColorLUT } = await import('./viewer/overlayBlender.js');
+        const DEFAULT_COLORS = [
+          null,
+          { r: 255, g: 0, b: 0 }, { r: 0, g: 255, b: 0 }, { r: 0, g: 0, b: 255 },
+          { r: 255, g: 255, b: 0 }, { r: 0, g: 255, b: 255 }, { r: 255, g: 0, b: 255 },
+        ];
+        for (const v of new Set(segData)) {
+          if (v === 0 || state.labels.has(v)) continue;
+          state.labels.set(v, {
+            name: `Label ${v}`, value: v,
+            color: v < DEFAULT_COLORS.length ? DEFAULT_COLORS[v] : { r: 200, g: 200, b: 200 },
+            isVisible: true,
+          });
+        }
+        state.colorLUT = buildColorLUT(state.labels);
+        if (state.activeLabel === 0) {
+          for (const [val] of state.labels) { if (val !== 0) { state.activeLabel = val; break; } }
+        }
+        state.notify();
+      } catch (e) {
+        alert('Failed to load mask: ' + e.message);
+      } finally {
+        loadMaskBtn.textContent = '📂 Load Label Mask';
+        loadMaskBtn.disabled = false;
+      }
+    });
+    fileInput.click();
+  });
+
+  const _hasLabels = () => [...state.labels.keys()].some(v => v !== 0);
+  const _updateSaveBtnVisibility = () => {
+    const has = _hasLabels();
+    saveBtn.style.display = has ? '' : 'none';
+    loadMaskBtn.style.display = has ? 'none' : '';
+  };
+  state.subscribe(_updateSaveBtnVisibility);
+  _updateSaveBtnVisibility();
   
   const showSaveModal = () => {
     const overlay = document.createElement('div');
@@ -606,6 +668,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
 
   saveBtn.addEventListener('click', showSaveModal);
   saveSec.appendChild(saveBtn);
+  saveSec.appendChild(loadMaskBtn);
   toolPanel.appendChild(saveSec);
 
   // Tool selection
