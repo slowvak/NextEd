@@ -591,6 +591,8 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
         if (state.activeLabel === 0) {
           for (const [val] of state.labels) { if (val !== 0) { state.activeLabel = val; break; } }
         }
+        _maskLoaded = true;
+        _showSaveBtn();
         state.notify();
       } catch (e) {
         alert('Failed to load mask: ' + e.message);
@@ -602,14 +604,22 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     fileInput.click();
   });
 
-  const _hasLabels = () => [...state.labels.keys()].some(v => v !== 0);
-  const _updateSaveBtnVisibility = () => {
-    const has = _hasLabels();
-    saveBtn.style.display = has ? '' : 'none';
-    loadMaskBtn.style.display = has ? 'none' : '';
-  };
-  state.subscribe(_updateSaveBtnVisibility);
-  _updateSaveBtnVisibility();
+  // "Save As" shows only when mask data actually exists; otherwise show "Load Label Mask".
+  // Init: one O(n) scan; after that use undoStack as an O(1) proxy for first-paint.
+  let _maskLoaded = !!(state.segVolume && state.segVolume.some(v => v !== 0));
+  const _showSaveBtn = () => { saveBtn.style.display = ''; loadMaskBtn.style.display = 'none'; };
+  const _showLoadBtn = () => { saveBtn.style.display = 'none'; loadMaskBtn.style.display = ''; };
+  if (_maskLoaded) {
+    _showSaveBtn();
+  } else {
+    _showLoadBtn();
+    const _unsubMask = state.subscribe(() => {
+      if (_maskLoaded) return;
+      if (state.undoStack && state.undoStack.length > 0) {
+        _maskLoaded = true; _showSaveBtn(); _unsubMask();
+      }
+    });
+  }
   
   const showSaveModal = () => {
     const overlay = document.createElement('div');
