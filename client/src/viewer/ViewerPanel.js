@@ -651,12 +651,17 @@ export class ViewerPanel {
     this.state.regionGrowAxis = this.axis;
     this.state.executeRegionGrow = () => this._applyRegionGrow();
 
-    // Range = mean ± stdev, but always guaranteed to contain the seed pixel.
-    // Without this, a seed at a tissue boundary (outlier in its 5×5 patch) would
-    // fall outside mean±stdev and the BFS would reject it immediately.
-    const rangeMin = Math.round(Math.min(mean - stdev, seedVal));
-    const rangeMax = Math.round(Math.max(mean + stdev, seedVal));
-    this.state.setRegionGrowRange(rangeMin, rangeMax);
+    const label = this.state.labels.get(this.state.activeLabel);
+    if (label && label.regionGrowMin !== undefined && label.regionGrowMax !== undefined) {
+      this.state.setRegionGrowRange(label.regionGrowMin, label.regionGrowMax);
+    } else {
+      // Range = mean ± stdev, but always guaranteed to contain the seed pixel.
+      // Without this, a seed at a tissue boundary (outlier in its 5×5 patch) would
+      // fall outside mean±stdev and the BFS would reject it immediately.
+      const rangeMin = Math.round(Math.min(mean - stdev, seedVal));
+      const rangeMax = Math.round(Math.max(mean + stdev, seedVal));
+      this.state.setRegionGrowRange(rangeMin, rangeMax);
+    }
     
     // The apply function reads the latest regionGrowMin/Max from state
     this._applyRegionGrow();
@@ -699,6 +704,9 @@ export class ViewerPanel {
     const startIdx = sz * dimX * dimY + sy * dimX + sx;
     visited[startIdx] = 1;
 
+    // Debug: log seed state so we can diagnose why a grow might produce nothing
+    console.log(`[NextEd] regionGrow axis=${this.axis} seed=(${sx},${sy},${sz}) idx=${startIdx} vol=${this.volume[startIdx]} range=[${regionGrowMin},${regionGrowMax}] seg=${this.state.segVolume[startIdx]} activeLabel=${activeLabel}`);
+
     // 4-connectivity in-plane neighbors + depth for multi-slice
     let neighbors;
     if (this.axis === 'axial')    neighbors = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
@@ -711,14 +719,19 @@ export class ViewerPanel {
         const idx = cz * dimX * dimY + cy * dimX + cx;
         const val = this.volume[idx];
 
-        // Accept only unlabeled voxels within intensity range
-        if (val < regionGrowMin || val > regionGrowMax || this.state.segVolume[idx] !== 0) continue;
+        // Skip voxels outside intensity range or labeled with a different label
+        if (val < regionGrowMin || val > regionGrowMax) continue;
+        const existingLabel = this.state.segVolume[idx];
+        if (existingLabel !== 0 && existingLabel !== activeLabel) continue;
 
-        newDiff.indices.push(idx);
-        newDiff.oldValues.push(0);
-        this.state.segVolume[idx] = activeLabel;
+        // Only add to diff if the voxel is currently unlabeled (needs to change)
+        if (existingLabel === 0) {
+          newDiff.indices.push(idx);
+          newDiff.oldValues.push(0);
+          this.state.segVolume[idx] = activeLabel;
+        }
 
-        // Only expand from accepted voxels — true flood fill, not full-slice scan
+        // Expand from both newly-labeled and already-same-labeled voxels
         for (let i = 0; i < neighbors.length; i++) {
             const [dx, dy, dz] = neighbors[i];
             // Skip depth neighbors when multiSlice == 1

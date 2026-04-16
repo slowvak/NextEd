@@ -971,12 +971,13 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     if (state.executeRegionGrow) state.executeRegionGrow();
   });
 
-  // On drag-end, recenter the slider bounds around the settled values.
+  // On drag-end, recenter the slider bounds and save to the label.
   rgMinSlider.addEventListener('change', () => {
     const minVal = parseInt(rgMinSlider.value);
     const maxVal = parseInt(rgMaxSlider.value);
     setRGSliderBounds(minVal, maxVal);
     updateRGFill();
+    state.setRegionGrowRange(minVal, maxVal);
   });
 
   rgMaxSlider.addEventListener('change', () => {
@@ -984,6 +985,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     const maxVal = parseInt(rgMaxSlider.value);
     setRGSliderBounds(minVal, maxVal);
     updateRGFill();
+    state.setRegionGrowRange(minVal, maxVal);
   });
 
   const commitRGInputs = () => {
