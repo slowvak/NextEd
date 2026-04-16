@@ -29,7 +29,8 @@ def _save_nifti_seg(vol_meta, data_z_y_x: np.ndarray, affine: np.ndarray, filena
     transposed_array = data_z_y_x.transpose(2, 1, 0)
     new_img = nib.Nifti1Image(transposed_array, affine)
     new_img.set_data_dtype(np.uint8)
-    out_path = Path(vol_meta.path).parent / filename
+    p = Path(filename)
+    out_path = p if p.is_absolute() else Path(vol_meta.path).parent / filename
     nib.save(new_img, out_path)
     return out_path
 

@@ -510,20 +510,42 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   };
   document.addEventListener('keydown', handleKeydown);
 
+  // Dirty tracking: segVersion at the time the mask was last saved (or loaded from disk).
+  // -1 means never saved; set to state.segVersion after a successful save or disk load.
+  let _savedSegVersion = _maskLoaded ? -1 : state.segVersion;
+  const _isDirty = () => _maskLoaded && state.segVersion !== _savedSegVersion;
+
+  const _navigateBack = () => {
+    document.removeEventListener('keydown', handleKeydown);
+    if (currentLayout) { currentLayout.destroy(); currentLayout = null; }
+    detailPanel.classList.remove('viewer-mode');
+    toolPanel.style.display = 'none';
+    sidebar.style.display = '';
+    init();
+  };
+
   // Back button
   const backBtn = document.createElement('button');
   backBtn.className = 'compact-back-btn';
   backBtn.textContent = '\u2190 Back to Volumes';
   backBtn.addEventListener('click', () => {
-    document.removeEventListener('keydown', handleKeydown);
-    if (currentLayout) {
-      currentLayout.destroy();
-      currentLayout = null;
-    }
-    detailPanel.classList.remove('viewer-mode');
-    toolPanel.style.display = 'none';
-    sidebar.style.display = '';
-    init();
+    if (!_isDirty()) { _navigateBack(); return; }
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#1e1e1e;padding:24px;border-radius:8px;width:380px;border:1px solid #3a3a3a;box-shadow:0 10px 30px rgba(0,0,0,0.5);color:#e0e0e0;';
+    modal.innerHTML = `
+      <h2 style="margin-top:0;font-size:18px;margin-bottom:8px;">Unsaved Changes</h2>
+      <p style="font-size:14px;color:#a0a0a0;margin-bottom:24px;">Your label mask has unsaved changes. Save before leaving?</p>
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button id="back-discard" style="padding:8px 16px;background:none;border:1px solid #a0a0a0;color:#a0a0a0;border-radius:4px;cursor:pointer;">Discard</button>
+        <button id="back-save" style="padding:8px 16px;background:#4a9eff;border:none;color:#fff;border-radius:4px;cursor:pointer;font-weight:bold;">Save As...</button>
+      </div>`;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    const closePrompt = () => document.body.removeChild(overlay);
+    modal.querySelector('#back-discard').addEventListener('click', () => { closePrompt(); _navigateBack(); });
+    modal.querySelector('#back-save').addEventListener('click', () => { closePrompt(); showSaveModal(_navigateBack); });
   });
   toolPanel.appendChild(backBtn);
 
@@ -592,6 +614,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
           for (const [val] of state.labels) { if (val !== 0) { state.activeLabel = val; break; } }
         }
         _maskLoaded = true;
+        _savedSegVersion = state.segVersion; // loaded from disk, not dirty
         _showSaveBtn();
         state.notify();
       } catch (e) {
@@ -615,35 +638,57 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     _showLoadBtn();
     const _unsubMask = state.subscribe(() => {
       if (_maskLoaded) return;
-      if (state.undoStack && state.undoStack.length > 0) {
-        _maskLoaded = true; _showSaveBtn(); _unsubMask();
+      // Use O(1) hints to gate the O(n) scan: undoStack has entries (committed
+      // paint/grow) or a region grow seed is active (data written but not yet committed).
+      const hint = (state.undoStack && state.undoStack.length > 0) || !!state.regionGrowSeed;
+      if (hint && state.segVolume && state.segVolume.some(v => v !== 0)) {
+        _maskLoaded = true;
+        _showSaveBtn();
+        _unsubMask();
       }
     });
   }
   
-  const showSaveModal = () => {
+  const showSaveModal = (onSuccess) => {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
     
     const modal = document.createElement('div');
     modal.style.cssText = 'background:#1e1e1e;padding:24px;border-radius:8px;width:400px;border:1px solid #3a3a3a;box-shadow:0 10px 30px rgba(0,0,0,0.5);color:#e0e0e0;';
     
+    modal.style.width = '560px';
     modal.innerHTML = `
-      <h2 style="margin-top:0;font-size:18px;margin-bottom:8px;">Save Segmentation As...</h2>
-      <p style="font-size:14px;color:#a0a0a0;margin-bottom:16px;">Provide a filename for the modified segmentation volume.</p>
-      <input type="text" id="save-filename" style="width:100%;padding:8px;margin-bottom:24px;background:#2d2d2d;border:1px solid #4a9eff;border-radius:4px;color:#fff;" />
+      <h2 style="margin-top:0;font-size:18px;margin-bottom:8px;">Save Label Mask As...</h2>
+      <p style="font-size:14px;color:#a0a0a0;margin-bottom:8px;">Full path to save:</p>
+      <input type="text" id="save-filename" style="width:100%;box-sizing:border-box;padding:8px;margin-bottom:24px;background:#2d2d2d;border:1px solid #4a9eff;border-radius:4px;color:#fff;font-family:monospace;font-size:12px;" />
       <div style="display:flex;justify-content:flex-end;gap:8px;">
         <button id="save-cancel" style="padding:8px 16px;background:none;border:1px solid #a0a0a0;color:#a0a0a0;border-radius:4px;cursor:pointer;">Cancel</button>
-        <button id="save-confirm" style="padding:8px 16px;background:#4a9eff;border:none;color:#fff;border-radius:4px;cursor:pointer;font-weight:bold;">Confirm Save</button>
+        <button id="save-confirm" style="padding:8px 16px;background:#4a9eff;border:none;color:#fff;border-radius:4px;cursor:pointer;font-weight:bold;">Save</button>
       </div>
     `;
-    
+
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
-    
+
+    // Compute default full path from volume's path on disk
+    let defaultPath = 'segmentation.nii.gz';
+    if (metadata.path) {
+      let isDicom = false;
+      try { JSON.parse(metadata.path); isDicom = true; } catch {}
+      if (isDicom) {
+        defaultPath = (metadata.name || 'segmentation') + '_seg.dcm';
+      } else {
+        const lastSlash = metadata.path.lastIndexOf('/');
+        const dir = lastSlash >= 0 ? metadata.path.substring(0, lastSlash + 1) : '';
+        const base = metadata.name ? metadata.name.replace(/\.nii(\.gz)?$/, '') : 'segmentation';
+        defaultPath = dir + base + '_seg.nii.gz';
+      }
+    }
+
     const input = modal.querySelector('#save-filename');
-    input.value = metadata.name ? metadata.name.replace(/\.nii(\.gz)?$/, '') + '_seg.nii.gz' : 'segmentation.nii.gz';
+    input.value = defaultPath;
     input.focus();
+    input.select();
     
     const close = () => document.body.removeChild(overlay);
     
@@ -666,8 +711,10 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
         }
         return res.json();
       }).then(data => {
+        _savedSegVersion = state.segVersion;
         close();
-        alert('Saved successfully: ' + data.filename);
+        alert('Saved successfully: ' + data.path);
+        if (typeof onSuccess === 'function') onSuccess();
       }).catch(err => {
         alert(err.message);
         confirmBtn.textContent = 'Confirm Save';

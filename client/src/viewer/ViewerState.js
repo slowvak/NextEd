@@ -73,6 +73,8 @@ export class ViewerState {
     this.regionGrowAxis = null;     // 'axial' | 'coronal' | 'sagittal'
     this.executeRegionGrow = null;  // Callback set by active ViewerPanel
 
+    this.segVersion = 0; // increments on every seg modification; use to detect unsaved changes
+
     /** @type {Array<function(ViewerState): void>} */
     this.listeners = [];
 
@@ -272,6 +274,7 @@ export class ViewerState {
     if (this.undoStack.length > 5) {
       this.undoStack.shift(); // Cap at length 5
     }
+    this.segVersion++;
     this.notify();
   }
 
