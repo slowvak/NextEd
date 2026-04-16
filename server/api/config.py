@@ -14,9 +14,9 @@ DEFAULT_CONFIG = {
     "source_directory": "",
     "window_level_presets": {
         "Brain": {"center": 40, "width": 80},
-        "Bone": {"center": 500, "width": 3000},
-        "Lung": {"center": -500, "width": 1000},
-        "Abd": {"center": 125, "width": 450}
+        "Bone": {"center": 500, "width": 2000},
+        "Lung": {"center": -600, "width": 1500},
+        "Abd": {"center": 40, "width": 400}
     },
     "default_labels": {
         "1": "Label 1",
