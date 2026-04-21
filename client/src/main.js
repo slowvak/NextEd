@@ -501,11 +501,31 @@ function _ensureLabel(state) {
 function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   toolPanel.innerHTML = '';
 
+  let _savedOpacity = null;
+
   const handleKeydown = (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const targetTag = e.target.tagName;
+    const targetType = e.target.type;
+    const isTextInput = (targetTag === 'TEXTAREA') ||
+      (targetTag === 'INPUT' && targetType !== 'range' && targetType !== 'checkbox' && targetType !== 'radio');
+    if (isTextInput) return;
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
       state.undo();
+    }
+    if (e.key === ' ') {
+      e.preventDefault();
+      const opacityInput = document.getElementById('overlay-opacity');
+      const opacityVal = document.getElementById('opacity-val');
+      if (state.overlayOpacity > 0) {
+        _savedOpacity = state.overlayOpacity;
+        state.setOverlayOpacity(0);
+      } else {
+        state.setOverlayOpacity(_savedOpacity !== null ? _savedOpacity : 0.5);
+        _savedOpacity = null;
+      }
+      if (opacityInput) opacityInput.value = Math.round(state.overlayOpacity * 100);
+      if (opacityVal) opacityVal.textContent = `${Math.round(state.overlayOpacity * 100)}%`;
     }
   };
   document.addEventListener('keydown', handleKeydown);
