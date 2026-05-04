@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-4 (shipped)
 - ✅ **v2.0 Image Server Architecture** — Phases 5-8 (shipped 2026-04-07)
+- 🚧 **v3.0 AI Integration** — SigmaServer split + AI tool pipeline (in progress)
 
 ## Phases
 
@@ -27,6 +28,20 @@
 
 </details>
 
+### v3.0 AI Integration (In Progress)
+
+**Milestone Goal:** SIGMA users can run AI segmentation models from a GPU machine directly within the viewer. Models are discovered dynamically from a separate SigmaServer process and results are applied as segmentation overlays.
+
+**Architecture:**
+- `SigmaServer` (../SigmaServer) — standalone GPU server: loads models, exposes `/models` (tool list), `/predict` (inference), `/health`
+- `Sigma` — calls `GET /models` on startup to populate the AI tools panel; calls `POST /predict` with the current volume and receives a segmentation mask back
+
+**Phases:**
+
+- [x] **Phase 9: SigmaServer Split** — Extract inference server into `../SigmaServer` repo; add `/models` dynamic discovery endpoint; update Sigma's `server/api/ai.py` to fetch models from SigmaServer rather than static config
+- [ ] **Phase 10: AI Tools Panel** — Client-side AI tools panel showing models fetched from `/models`; job submission, SSE progress, result application as segmentation overlay
+- [ ] **Phase 11: Additional Models** — Add further models to SigmaServer (e.g. SAM-based refinement, organ-specific models) using the `@register_model` decorator pattern
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -39,3 +54,6 @@
 | 6. Folder Monitoring & WebSocket Events | v2.0 | 2/2 | Complete | 2026-04-06 |
 | 7. Format-Aware Segmentation Storage | v2.0 | 2/2 | Complete | 2026-04-06 |
 | 8. DICOMweb WADO-RS | v2.0 | 1/1 | Complete | 2026-04-06 |
+| 9. SigmaServer Split | v3.0 | 1/1 | Complete | 2026-05-04 |
+| 10. AI Tools Panel | v3.0 | 0/1 | Not started | - |
+| 11. Additional Models | v3.0 | 0/1 | Not started | - |

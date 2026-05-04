@@ -36,9 +36,22 @@ def _load_config() -> dict:
 
 @router.get("/models")
 async def list_models():
-    """Return available AI models from config."""
+    """Return available AI models by querying SigmaServer's /models endpoint."""
+    import httpx
+
     config = _load_config()
-    return config.get("models", [])
+    server_url = config.get("server", "").rstrip("/")
+    if not server_url:
+        return []
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{server_url}/models")
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception:
+        pass
+    return []
 
 
 @router.post("/run")

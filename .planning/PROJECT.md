@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A web-based medical image viewer and segmentation editor for researchers and radiologists. It consists of a Python/FastAPI image server that continuously monitors filesystem folders, catalogs NIfTI and DICOM volumes, serves them via DICOMweb WADO-RS and binary streaming APIs, and broadcasts catalog changes over WebSocket. A JavaScript web client loads volumes into browser memory for fast multi-plane viewing and segmentation editing. Think ITK-SNAP, but accessible through a browser with live folder monitoring.
+A web-based medical image viewer and segmentation editor for researchers and radiologists. It consists of a Python/FastAPI image server that continuously monitors filesystem folders, catalogs NIfTI and DICOM volumes, serves them via DICOMweb WADO-RS and binary streaming APIs, and broadcasts catalog changes over WebSocket. A JavaScript web client loads volumes into browser memory for fast multi-plane viewing and segmentation editing. AI segmentation is handled by a separate SigmaServer process (../SigmaServer) running on a GPU machine — SIGMA discovers available AI tools from it dynamically. Think ITK-SNAP, but accessible through a browser with live folder monitoring and GPU-backed AI segmentation.
 
 ## Core Value
 
@@ -87,6 +87,8 @@ Researchers and radiologists can view and segment medical image volumes entirely
 | WebSocket for catalog events | Push-based updates more efficient than polling for FS changes | ✓ Good |
 | StreamingResponse for WADO-RS | Memory-efficient for 500+ slice series; chunked file reads | ✓ Good |
 | pydicom to_json_dict() for metadata | Battle-tested PS3.18 JSON; handles all VR types correctly | ✓ Good |
+| SigmaServer as separate repo (../SigmaServer) | AI inference runs on a GPU machine; Sigma stays lightweight with no ML deps | ✓ Good |
+| Dynamic /models endpoint on SigmaServer | SIGMA discovers tools without static config; adding a model requires only server-side change | ✓ Good |
 
 ## Evolution
 
