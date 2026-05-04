@@ -120,6 +120,7 @@ export function openHelpModal() {
     ['Crosshair \u2316', 'Navigate: click to set crosshair position across all views'],
     ['Paint \u270f', 'Freehand brush \u2014 left-click drag to paint the active label'],
     ['Grow2D', 'Click a seed voxel on the current slice; the region expands to connected voxels whose intensity falls within the Min\u2013Max range. The range auto-sets to mean\u00b1stdev of the 5\u00d75 patch around the seed and can be adjusted with the dual slider or typed into the number fields.'],
+    ['Grow3D', 'Like Grow2D but expands through all three dimensions using 6-connectivity. Min\u2013Max range is shared with Grow2D. Clicking an already-labeled voxel seeds from that point using the stored range, or computes it from the entire labeled volume if not yet set.'],
     ['Brush Radius', 'Slider controls paint brush size in pixels'],
     ['Brush Depth', 'Number of adjacent slices the brush paints through simultaneously (odd numbers only)'],
     ['Intensity Limits', 'Constrain paint to voxels within a min/max HU range'],

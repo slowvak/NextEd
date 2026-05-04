@@ -763,6 +763,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
         <button class="tool-option compact-btn" data-tool="crosshair" data-label="⌖ Cursor" style="width:100%;text-align:left;border:none;border-radius:0;flex:unset;">⌖ Cursor</button>
         <button class="tool-option compact-btn" data-tool="paint" data-label="🖌 Paint" style="width:100%;text-align:left;border:none;border-radius:0;flex:unset;">🖌 Paint</button>
         <button class="tool-option compact-btn" data-tool="region-grow" data-label="⬡ Grow2D" style="width:100%;text-align:left;border:none;border-radius:0;flex:unset;">⬡ Grow2D</button>
+        <button class="tool-option compact-btn" data-tool="region-grow-3d" data-label="⬡ Grow3D" style="width:100%;text-align:left;border:none;border-radius:0;flex:unset;">⬡ Grow3D</button>
       </div>
     </div>
   `;
@@ -1208,7 +1209,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   rgMaxInput.addEventListener('change', commitRGInputs);
 
   const updateToolPlanes = () => {
-    if (state.activeTool === 'region-grow') {
+    if (state.activeTool === 'region-grow' || state.activeTool === 'region-grow-3d') {
       rgSec.style.display = 'flex';
       constrSec.style.display = 'none';
     } else {

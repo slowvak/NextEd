@@ -172,7 +172,7 @@ export class ViewerState {
 
   setActiveTool(tool) {
     this.activeTool = tool;
-    if (tool !== 'region-grow') {
+    if (tool !== 'region-grow' && tool !== 'region-grow-3d') {
       this.regionGrowSeed = null;
       this.regionGrowMean = null;
       this.executeRegionGrow = null;
