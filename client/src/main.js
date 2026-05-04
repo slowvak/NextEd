@@ -1472,6 +1472,25 @@ async function _showAIModelPicker(state, metadata) {
     `;
   }
   html += '</div>';
+
+  html += `
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #3a3a3a;">
+      <div style="font-size:13px;margin-bottom:8px;font-weight:600;">Result Strategy</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px;">
+        <input type="radio" name="ai-strategy" value="replace" checked>
+        Replace current labels (clears existing)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="radio" name="ai-strategy" value="merge">
+        Merge with current labels (adds new predictions)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="radio" name="ai-strategy" value="and">
+        Intersect with current labels (ANDing)
+      </label>
+    </div>
+  `;
+
   html += '<div id="ai-progress" style="display:none;margin-top:16px;">';
   html += '  <div style="font-size:13px;margin-bottom:8px;" id="ai-status-text">Starting...</div>';
   html += '  <div style="background:#3a3a3a;border-radius:4px;height:8px;overflow:hidden;">';
@@ -1612,17 +1631,48 @@ async function _showAIModelPicker(state, metadata) {
 
         const labelsJson = resultResp.headers.get('X-AI-Labels');
         const aiLabels = labelsJson ? JSON.parse(labelsJson) : [];
+        const reportJson = resultResp.headers.get('X-AI-Report');
+        const aiReport = reportJson ? JSON.parse(reportJson) : null;
 
-        // Replace segmentation volume
-        if (!state.segVolume || state.segVolume.length !== maskData.length) {
-          const [dx, dy, dz] = state.dims;
-          state.segVolume = new Uint8Array(dx * dy * dz);
-          state.segDims = [...state.dims];
+        const strategy = modal.querySelector('input[name="ai-strategy"]:checked').value;
+        const [dx, dy, dz] = state.dims;
+        const volSize = dx * dy * dz;
+
+        if (strategy === 'replace') {
+          // Replace segmentation volume
+          if (!state.segVolume || state.segVolume.length !== maskData.length) {
+            state.segVolume = new Uint8Array(volSize);
+            state.segDims = [...state.dims];
+          }
+          state.segVolume.set(maskData);
+          state.labels.clear();
+        } else if (strategy === 'merge') {
+          // Merge (OR) strategy
+          if (!state.segVolume) {
+            state.segVolume = new Uint8Array(volSize);
+            state.segDims = [...state.dims];
+          }
+          for (let i = 0; i < volSize; i++) {
+            if (maskData[i] !== 0) {
+              state.segVolume[i] = maskData[i];
+            }
+          }
+        } else if (strategy === 'and') {
+          // Intersect (AND) strategy
+          if (!state.segVolume) {
+            state.segVolume = new Uint8Array(volSize);
+            state.segDims = [...state.dims];
+          }
+          for (let i = 0; i < volSize; i++) {
+            if (maskData[i] !== 0 && state.segVolume[i] !== 0) {
+              state.segVolume[i] = maskData[i];
+            } else {
+              state.segVolume[i] = 0;
+            }
+          }
         }
-        state.segVolume.set(maskData);
 
-        // Replace labels
-        state.labels.clear();
+        // Add/Update labels
         const { buildColorLUT } = await import('./viewer/overlayBlender.js');
 
         for (const lb of aiLabels) {
@@ -1652,7 +1702,7 @@ async function _showAIModelPicker(state, metadata) {
             { r: 255, g: 255, b: 0 }, { r: 0, g: 255, b: 255 }, { r: 255, g: 0, b: 255 },
           ];
           for (const v of uniqueVals) {
-            if (v === 0) continue;
+            if (v === 0 || state.labels.has(v)) continue;
             state.labels.set(v, {
               name: `Label ${v}`,
               value: v,
@@ -1672,6 +1722,11 @@ async function _showAIModelPicker(state, metadata) {
         state.notify();
         close();
 
+        // Show report if available
+        if (aiReport && Object.keys(aiReport).length > 0) {
+          setTimeout(() => _showAIReportModal(aiReport), 100);
+        }
+
       } catch (err) {
         statusText.textContent = `Error: ${err.message}`;
         statusText.style.color = '#ff6b6b';
@@ -1679,6 +1734,37 @@ async function _showAIModelPicker(state, metadata) {
       }
     });
   });
+}
+
+function _showAIReportModal(reportData) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:center;justify-content:center;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:#1e1e1e;padding:24px;border-radius:8px;width:500px;border:1px solid #3a3a3a;box-shadow:0 10px 30px rgba(0,0,0,0.5);color:#e0e0e0;max-height:80vh;display:flex;flex-direction:column;';
+
+  const title = document.createElement('h2');
+  title.textContent = 'AI Report';
+  title.style.margin = '0 0 16px 0';
+  title.style.fontSize = '18px';
+  modal.appendChild(title);
+
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'flex:1;overflow:auto;background:#2d2d2d;padding:12px;border-radius:4px;border:1px solid #444;font-size:12px;white-space:pre-wrap;';
+  pre.textContent = JSON.stringify(reportData, null, 2);
+  modal.appendChild(pre);
+
+  const actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;justify-content:flex-end;margin-top:16px;';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.className = 'btn btn-primary';
+  closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
+  actions.appendChild(closeBtn);
+  modal.appendChild(actions);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
 }
 
 function _showLabelEditPopup(state, val) {

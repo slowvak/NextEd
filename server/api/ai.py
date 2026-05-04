@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import nibabel as nib
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import Response, StreamingResponse
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
@@ -34,11 +34,32 @@ def _load_config() -> dict:
     return cfg.get("ai", {"server": "", "models": []})
 
 
+async def _fetch_dynamic_models(config: dict) -> list[dict]:
+    """Fetch models from inference server, fallback to config.json models."""
+    import httpx
+    
+    server_url = config.get("server", "").rstrip("/")
+    if not server_url:
+        return config.get("models", [])
+        
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{server_url}/models")
+            if resp.status_code == 200:
+                dynamic_models = resp.json()
+                if isinstance(dynamic_models, list) and len(dynamic_models) > 0:
+                    return dynamic_models
+    except Exception as e:
+        print(f"Warning: Failed to fetch models from AI server {server_url}: {e}")
+        
+    return config.get("models", [])
+
+
 @router.get("/models")
 async def list_models():
-    """Return available AI models from config."""
+    """Return available AI models from AI server (or fallback to config)."""
     config = _load_config()
-    return config.get("models", [])
+    return await _fetch_dynamic_models(config)
 
 
 @router.post("/run")
@@ -75,7 +96,8 @@ async def run_model(request: Request):
 
     # Find model config
     config = _load_config()
-    model_cfg = next((m for m in config.get("models", []) if m["id"] == model_id), None)
+    models = await _fetch_dynamic_models(config)
+    model_cfg = next((m for m in models if m["id"] == model_id), None)
     if not model_cfg:
         raise HTTPException(status_code=404, detail=f"Model {model_id} not found")
 
@@ -353,3 +375,39 @@ async def get_job_result(job_id: str):
         media_type="application/octet-stream",
         headers=headers,
     )
+
+
+@router.post("/upload-model")
+async def upload_model(
+    file: UploadFile = File(...),
+    config: UploadFile | None = File(None),
+    name: str = Form(None),
+    description: str = Form(None)
+):
+    """Proxy model upload to the AI Inference server."""
+    import httpx
+    
+    cfg = _load_config()
+    server_url = cfg.get("server", "").rstrip("/")
+    if not server_url:
+        raise HTTPException(status_code=400, detail="No AI server configured")
+        
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # We need to forward the file as multipart/form-data
+            files = [('file', (file.filename, await file.read(), file.content_type))]
+            if config:
+                files.append(('config', (config.filename, await config.read(), config.content_type)))
+            
+            data = {}
+            if name: data['name'] = name
+            if description: data['description'] = description
+            
+            resp = await client.post(f"{server_url}/models/upload", files=files, data=data)
+            
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+                
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload model: {e}")

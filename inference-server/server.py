@@ -18,28 +18,73 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile, Request
 from fastapi.responses import Response
 
 app = FastAPI(title="SIGMA AI Inference Server")
 
 # Registry of model runners — keyed by weights string from config
 _runners: dict[str, callable] = {}
+# Full metadata for models (registered via python or API)
+_model_catalog: dict[str, dict] = {}
 
 
-def register_runner(weights_name: str):
+def register_runner(weights_name: str, meta: dict = None):
     """Decorator to register a model runner function."""
     def decorator(fn):
         _runners[weights_name] = fn
+        _model_catalog[weights_name] = meta or {
+            "id": weights_name,
+            "name": weights_name.replace("_", " ").title(),
+            "weights": weights_name
+        }
         return fn
     return decorator
+
+
+def load_dynamic_models():
+    """Load dynamically registered models from a local JSON file."""
+    p = Path("dynamic_models.json")
+    if p.exists():
+        try:
+            with open(p) as f:
+                models = json.load(f)
+            for m in models:
+                wid = m["weights"]
+                _model_catalog[wid] = m
+                if m.get("runner_type") == "onnx":
+                    model_path = Path(m["model_path"])
+                    _runners[wid] = lambda i, o, l, p=model_path: run_custom_onnx(i, o, l, p)
+                elif m.get("runner_type") in ["safetensors", "hf_2d"]:
+                    model_path = Path(m["model_path"])
+                    _runners[wid] = lambda i, o, l, p=model_path: run_hf_safetensors(i, o, l, p)
+                else:
+                    _runners[wid] = lambda i, o, l, m=m: run_mhub_docker(i, o, l, docker_image=m.get("docker_image", "mhubai/totalsegmentator"))
+        except Exception as e:
+            print(f"Failed to load dynamic models: {e}")
+
+def save_dynamic_models():
+    """Save dynamic models to local JSON file."""
+    dynamic = [m for w, m in _model_catalog.items() if m.get("is_dynamic")]
+    try:
+        with open("dynamic_models.json", "w") as f:
+            json.dump(dynamic, f, indent=2)
+    except Exception as e:
+        print(f"Failed to save dynamic models: {e}")
+
+load_dynamic_models()
 
 
 # ---------------------------------------------------------------------------
 # TotalSegmentator runner
 # ---------------------------------------------------------------------------
 
-@register_runner("totalsegmentator_v2")
+@register_runner("totalsegmentator_v2", meta={
+    "id": "totalsegmentator_v2",
+    "name": "TotalSegmentator v2",
+    "description": "Full body segmentation (117 structures)",
+    "weights": "totalsegmentator_v2"
+})
 def run_totalsegmentator(input_path: Path, output_dir: Path, labels_path: Path | None):
     """Run TotalSegmentator on input NIfTI, return output mask path + label map.
 
@@ -120,7 +165,12 @@ def run_totalsegmentator(input_path: Path, output_dir: Path, labels_path: Path |
 # Generic mhub Docker runner (template for other models)
 # ---------------------------------------------------------------------------
 
-@register_runner("mhub_docker")
+@register_runner("mhub_docker", meta={
+    "id": "mhub_docker",
+    "name": "mhub.ai TotalSegmentator",
+    "description": "Run via mhub docker container",
+    "weights": "mhub_docker"
+})
 def run_mhub_docker(input_path: Path, output_dir: Path, labels_path: Path | None,
                     docker_image: str = "mhubai/totalsegmentator"):
     """Run an mhub.ai Docker container for inference.
@@ -164,7 +214,13 @@ def run_mhub_docker(input_path: Path, output_dir: Path, labels_path: Path | None
 # Refine segmentation runner (placeholder — uses existing labels)
 # ---------------------------------------------------------------------------
 
-@register_runner("refine_v1")
+@register_runner("refine_v1", meta={
+    "id": "refine_v1",
+    "name": "Refine Boundary",
+    "description": "Placeholder refine logic",
+    "weights": "refine_v1",
+    "accepts_labels": True
+})
 def run_refine(input_path: Path, output_dir: Path, labels_path: Path | None):
     """Placeholder: refine existing segmentation using image features.
 
@@ -178,6 +234,180 @@ def run_refine(input_path: Path, output_dir: Path, labels_path: Path | None):
     output_path = output_dir / "refined.nii.gz"
     shutil.copy2(labels_path, output_path)
     return output_path, []
+
+
+# ---------------------------------------------------------------------------
+# Custom ONNX Runner
+# ---------------------------------------------------------------------------
+
+def run_custom_onnx(input_path: Path, output_dir: Path, labels_path: Path | None, model_path: Path):
+    """Run an ONNX model (either via ONNXRuntime or converted to MLX)."""
+    import nibabel as nib
+    import numpy as np
+    import sys
+    
+    # Load input
+    img = nib.load(str(input_path))
+    data = np.asarray(img.dataobj).astype(np.float32)
+    
+    # Assume 3D input tensor [1, 1, Z, Y, X]
+    # For a general model, we pad/resize as needed, but for now just pass it directly.
+    input_tensor = np.expand_dims(np.expand_dims(data, axis=0), axis=0)
+    
+    if sys.platform == 'darwin':
+        # Use MLX
+        import mlx.core as mx
+        import onnx
+        from onnx2mlx.convert import convert_to_mlx
+        
+        # Load and convert ONNX to MLX
+        onnx_model = onnx.load(str(model_path))
+        mlx_model = convert_to_mlx(onnx_model)
+        
+        # Run inference
+        mx_input = mx.array(input_tensor)
+        output = mlx_model(mx_input)
+        
+        # Handle multiple outputs or single output
+        if isinstance(output, list) or isinstance(output, tuple):
+            output = output[0]
+            
+        output_np = np.array(output)
+    else:
+        # Use ONNXRuntime
+        import onnxruntime as ort
+        
+        session = ort.InferenceSession(str(model_path))
+        input_name = session.get_inputs()[0].name
+        output = session.run(None, {input_name: input_tensor})[0]
+        output_np = np.array(output)
+        
+    # Postprocess: output_np is presumably [1, C, Z, Y, X]
+    # Take argmax over channel dim if C > 1, else threshold
+    if output_np.shape[1] > 1:
+        mask = np.argmax(output_np[0], axis=0).astype(np.uint8)
+    else:
+        mask = (output_np[0, 0] > 0.5).astype(np.uint8)
+    
+    # Create default labels for the output classes
+    unique_labels = np.unique(mask)
+    labels = []
+    for l in unique_labels:
+        if l == 0: continue
+        labels.append({
+            "value": int(l),
+            "name": f"Structure {l}",
+            "color": _default_color(int(l))
+        })
+    
+    # Save output
+    output_path = output_dir / "output.nii.gz"
+    out_img = nib.Nifti1Image(mask, img.affine)
+    nib.save(out_img, str(output_path))
+    
+    return output_path, labels
+
+# ---------------------------------------------------------------------------
+# HuggingFace Safetensors Runner (2D slice-by-slice over 3D NIfTI)
+# ---------------------------------------------------------------------------
+
+def run_hf_safetensors(input_path: Path, output_dir: Path, labels_path: Path | None, model_path: Path):
+    """Run a HuggingFace Segformer model from a safetensors file."""
+    import nibabel as nib
+    import numpy as np
+    import torch
+    from PIL import Image
+    from transformers import AutoModelForImageSegmentation, AutoImageProcessor
+    
+    # 1. Load the 3D NIfTI
+    img = nib.load(str(input_path))
+    # data is usually (X, Y, Z)
+    data = np.asarray(img.dataobj).astype(np.float32)
+    
+    # Normalize volume to 0-255 for the processor
+    d_min, d_max = data.min(), data.max()
+    if d_max > d_min:
+        data_norm = (data - d_min) / (d_max - d_min) * 255.0
+    else:
+        data_norm = data
+    data_norm = data_norm.astype(np.uint8)
+    
+    # 2. Load Model Architecture & Weights
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # We check if there's a config.json next to the model_path
+    model_dir = model_path.parent
+    has_local_config = (model_dir / "config.json").exists()
+    
+    if has_local_config:
+        base_repo = str(model_dir)
+        report = None
+    else:
+        # Fallback for testing
+        base_repo = "kiselyovd/brain-mri-segmentation"
+        report = {"type": "warning", "text": "WARNING: config.json was not found. Using fallback architecture: kiselyovd/brain-mri-segmentation."}
+    
+    processor = AutoImageProcessor.from_pretrained(base_repo)
+    # Load model architecture from local config or repo, but weights from local safetensors
+    model = AutoModelForImageSegmentation.from_pretrained(base_repo, state_dict=None)
+    
+    if model_path.suffix.lower() == ".safetensors":
+        from safetensors.torch import load_file
+        state_dict = load_file(str(model_path))
+    else:
+        state_dict = torch.load(str(model_path), map_location=device, weights_only=True)
+        
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+    
+    # 3. Iterate over Z-axis (slices)
+    # Assuming data shape is (X, Y, Z), we iterate over Z
+    out_mask = np.zeros_like(data, dtype=np.uint8)
+    
+    with torch.no_grad():
+        for z in range(data.shape[2]):
+            slice_2d = data_norm[:, :, z]
+            # Convert 1-channel grayscale to 3-channel RGB (as expected by standard Segformer)
+            slice_rgb = np.stack((slice_2d,)*3, axis=-1)
+            
+            # Use PIL Image as expected by processor
+            pil_img = Image.fromarray(slice_rgb)
+            inputs = processor(images=pil_img, return_tensors="pt").to(device)
+            
+            outputs = model(**inputs)
+            logits = outputs.logits  # shape (batch_size, num_labels, height/4, width/4)
+            
+            # Upsample logits to original image size
+            import torch.nn.functional as F
+            upsampled_logits = F.interpolate(
+                logits,
+                size=slice_2d.shape, # (X, Y)
+                mode="bilinear",
+                align_corners=False,
+            )
+            
+            # Get argmax over classes
+            pred_mask = upsampled_logits.argmax(dim=1)[0].cpu().numpy()
+            out_mask[:, :, z] = pred_mask.astype(np.uint8)
+            
+    # 4. Create default labels
+    unique_labels = np.unique(out_mask)
+    labels = []
+    for l in unique_labels:
+        if l == 0: continue
+        labels.append({
+            "value": int(l),
+            "name": f"Structure {l}",
+            "color": _default_color(int(l))
+        })
+        
+    # 5. Save 3D output
+    output_path = output_dir / "output.nii.gz"
+    out_img = nib.Nifti1Image(out_mask, img.affine)
+    nib.save(out_img, str(output_path))
+    
+    return output_path, labels, report
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +456,12 @@ async def predict(
 
         # Run the model
         try:
-            mask_path, label_map = _runners[weights](input_path, output_dir, labels_path)
+            result = _runners[weights](input_path, output_dir, labels_path)
+            if len(result) == 3:
+                mask_path, label_map, report = result
+            else:
+                mask_path, label_map = result
+                report = None
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -242,6 +477,8 @@ async def predict(
         headers = {
             "X-AI-Labels": json.dumps(label_map),
         }
+        if report:
+            headers["X-AI-Report"] = json.dumps(report)
 
         return Response(
             content=mask_bytes,
@@ -262,9 +499,89 @@ async def health():
         "status": "ok",
         "gpu": gpu_name,
         "gpu_memory": gpu_mem,
-        "models": list(_runners.keys()),
+        "models": list(_model_catalog.values()),
     }
 
+@app.get("/models")
+async def get_models():
+    """Return all available models."""
+    return list(_model_catalog.values())
+
+@app.post("/models")
+async def add_model(request: Request):
+    """Dynamically register a new model (uses generic docker runner)."""
+    model_meta = await request.json()
+    wid = model_meta.get("weights", model_meta.get("id"))
+    if not wid:
+        return Response(content=json.dumps({"error": "id/weights required"}), status_code=400)
+    
+    model_meta["is_dynamic"] = True
+    _model_catalog[wid] = model_meta
+    _runners[wid] = lambda i, o, l, m=model_meta: run_mhub_docker(i, o, l, docker_image=m.get("docker_image", "mhubai/totalsegmentator"))
+    save_dynamic_models()
+    return {"status": "ok", "model": model_meta}
+
+@app.post("/models/upload")
+async def add_upload_model(
+    file: UploadFile = File(...),
+    config: UploadFile | None = File(None),
+    name: str = Form(None),
+    description: str = Form(None)
+):
+    """Upload an ONNX or HuggingFace (Safetensors/PyTorch) model, save it, and register the appropriate runner."""
+    import uuid
+    import sys
+    
+    # Determine type from extension
+    ext = Path(file.filename).suffix.lower()
+    if ext not in [".onnx", ".safetensors", ".pth", ".pt"]:
+        return Response(content=json.dumps({"error": f"Unsupported extension {ext}"}), status_code=400)
+    
+    is_onnx = ext == ".onnx"
+    runner_type = "onnx" if is_onnx else "hf_2d"
+    
+    wid = f"{runner_type}_" + str(uuid.uuid4())[:8]
+    model_name = name or file.filename or f"Custom {runner_type.upper()} Model"
+    
+    models_dir = Path("models")
+    models_dir.mkdir(exist_ok=True)
+    
+    if runner_type == "hf_2d":
+        model_dir = models_dir / wid
+        model_dir.mkdir(exist_ok=True)
+        model_path = model_dir / f"model{ext}"
+        model_path.write_bytes(await file.read())
+        if config:
+            config_path = model_dir / "config.json"
+            config_path.write_bytes(await config.read())
+    else:
+        model_path = models_dir / f"{wid}{ext}"
+        model_path.write_bytes(await file.read())
+    
+    if is_onnx:
+        accel_desc = " (MLX Accelerated)" if sys.platform == 'darwin' else " (ONNXRuntime)"
+    else:
+        accel_desc = " (HuggingFace 2D)"
+        
+    model_meta = {
+        "id": wid,
+        "weights": wid,
+        "name": model_name + accel_desc,
+        "description": description or f"Uploaded {runner_type.upper()} model.",
+        "is_dynamic": True,
+        "model_path": str(model_path),
+        "runner_type": runner_type
+    }
+    
+    _model_catalog[wid] = model_meta
+    
+    if is_onnx:
+        _runners[wid] = lambda i, o, l, p=model_path: run_custom_onnx(i, o, l, p)
+    else:
+        _runners[wid] = lambda i, o, l, p=model_path: run_hf_safetensors(i, o, l, p)
+        
+    save_dynamic_models()
+    return {"status": "ok", "model": model_meta}
 
 def _default_color(idx: int) -> str:
     """Generate a deterministic hex color for a label index."""

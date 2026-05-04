@@ -149,9 +149,12 @@ export function openHelpModal() {
   ]));
 
   modal.appendChild(section('AI', [
-    ['\ud83e\udd16 AI button', 'Opens the AI model picker. Choose a configured server-side model or TotalSegmentator.'],
+    ['\ud83e\udd16 AI button', 'Opens the AI model picker. Here you can choose from the models loaded on the Inference Server.'],
+    ['Uploading Models', 'You can dynamically upload new ONNX models to the server using the `POST /models/onnx` API endpoint (e.g., via curl). Uploaded models are persisted across server restarts.'],
+    ['MLX Acceleration', 'If the inference server is running on macOS, uploaded ONNX models are automatically converted to MLX for Apple Silicon hardware acceleration.'],
+    ['Status Bar', 'When you run a model, a progress bar and status text will appear indicating the inference progress.'],
+    ['Result Strategies', 'When the AI returns a label map, you can choose how to apply it:\n\u2022 Replace: Clears existing labels and replaces with AI predictions.\n\u2022 Merge (OR): Adds AI predictions to your existing labels.\n\u2022 Intersect (AND): Keeps AI labels only where you already had a label drawn.'],
     ['TotalSegmentator', 'Downloads the current volume as NIfTI and opens totalsegmentator.com for full-body auto-segmentation'],
-    ['Server models', 'Add custom models in models/ai-models.json; they appear in the AI picker automatically'],
   ]));
 
   modal.appendChild(section('Keyboard Shortcuts', [
