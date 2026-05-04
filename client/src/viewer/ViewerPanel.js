@@ -654,10 +654,58 @@ export class ViewerPanel {
     const label = this.state.labels.get(this.state.activeLabel);
     if (label && label.regionGrowMin !== undefined && label.regionGrowMax !== undefined) {
       this.state.setRegionGrowRange(label.regionGrowMin, label.regionGrowMax);
+    } else if (this.state.segVolume[seedIdx] === this.state.activeLabel) {
+      // Clicked on an existing label pixel with no stored range →
+      // derive min/max from all pixels on this slice that carry the active label.
+      let sliceMin = Infinity;
+      let sliceMax = -Infinity;
+
+      if (this.axis === 'axial') {
+        const z = fixedDepth;
+        for (let y = 0; y < dimY; y++) {
+          for (let x = 0; x < dimX; x++) {
+            if (this.state.segVolume[z * dimX * dimY + y * dimX + x] === this.state.activeLabel) {
+              const v = this.volume[z * dimX * dimY + y * dimX + x];
+              if (v < sliceMin) sliceMin = v;
+              if (v > sliceMax) sliceMax = v;
+            }
+          }
+        }
+      } else if (this.axis === 'coronal') {
+        const y = fixedDepth;
+        for (let z = 0; z < dimZ; z++) {
+          for (let x = 0; x < dimX; x++) {
+            if (this.state.segVolume[z * dimX * dimY + y * dimX + x] === this.state.activeLabel) {
+              const v = this.volume[z * dimX * dimY + y * dimX + x];
+              if (v < sliceMin) sliceMin = v;
+              if (v > sliceMax) sliceMax = v;
+            }
+          }
+        }
+      } else {
+        // sagittal
+        const x = fixedDepth;
+        for (let z = 0; z < dimZ; z++) {
+          for (let y = 0; y < dimY; y++) {
+            if (this.state.segVolume[z * dimX * dimY + y * dimX + x] === this.state.activeLabel) {
+              const v = this.volume[z * dimX * dimY + y * dimX + x];
+              if (v < sliceMin) sliceMin = v;
+              if (v > sliceMax) sliceMax = v;
+            }
+          }
+        }
+      }
+
+      // Fallback: if no label pixels found on slice (shouldn't happen since seedIdx matched),
+      // use mean±stdev as safety net.
+      if (!isFinite(sliceMin)) {
+        sliceMin = Math.round(Math.min(mean - stdev, seedVal));
+        sliceMax = Math.round(Math.max(mean + stdev, seedVal));
+      }
+
+      this.state.setRegionGrowRange(Math.round(sliceMin), Math.round(sliceMax));
     } else {
-      // Range = mean ± stdev, but always guaranteed to contain the seed pixel.
-      // Without this, a seed at a tissue boundary (outlier in its 5×5 patch) would
-      // fall outside mean±stdev and the BFS would reject it immediately.
+      // Unlabeled pixel with no stored range → mean ± stdev, clamped to include seed.
       const rangeMin = Math.round(Math.min(mean - stdev, seedVal));
       const rangeMax = Math.round(Math.max(mean + stdev, seedVal));
       this.state.setRegionGrowRange(rangeMin, rangeMax);
