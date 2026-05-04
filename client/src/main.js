@@ -143,7 +143,7 @@ async function initTaskMode(taskParams) {
   const header = document.createElement('header');
   header.className = 'app-header';
   const h1 = document.createElement('h1');
-  h1.textContent = 'NextEd';
+  h1.textContent = 'Sigma';
   header.appendChild(h1);
   app.appendChild(header);
 
