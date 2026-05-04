@@ -365,6 +365,56 @@ def _load_cache(cache_path: Path, expected_key: str) -> list[dict] | None:
         return None
 
 
+def _cache_is_fresh(cache_path: Path, scan_paths: list[str]) -> bool:
+    """Return True if cache_path exists and no file/dir under scan_paths is newer.
+
+    Walks each scan path (file or directory tree) and compares mtime against
+    the cache file's mtime. The cache file itself is skipped during traversal.
+    OSError/PermissionError on individual entries is swallowed (that entry
+    is treated as not-newer) so a single unreadable file does not force a rescan.
+    """
+    if not cache_path.exists():
+        return False
+    try:
+        cache_mtime = cache_path.stat().st_mtime
+    except OSError:
+        return False
+
+    for p in scan_paths:
+        try:
+            path = Path(p).expanduser().resolve()
+        except OSError:
+            continue
+        if not path.exists():
+            continue
+
+        if path.is_file():
+            try:
+                if path.stat().st_mtime > cache_mtime:
+                    return False
+            except (OSError, PermissionError):
+                continue
+        elif path.is_dir():
+            try:
+                if path.stat().st_mtime > cache_mtime:
+                    return False
+            except (OSError, PermissionError):
+                pass
+            for item in path.rglob("*"):
+                # Skip the cache file itself — writing it updates its own mtime
+                try:
+                    if item.resolve() == cache_path.resolve():
+                        continue
+                except OSError:
+                    pass
+                try:
+                    if item.stat().st_mtime > cache_mtime:
+                        return False
+                except (OSError, PermissionError):
+                    continue
+    return True
+
+
 def _save_cache(cache_path: Path, key: str, catalog: list[VolumeMetadata],
                 seg_catalog: dict[str, list[SegmentationMetadata]],
                 path_registry: list[tuple[str, str, str]]):
@@ -477,7 +527,7 @@ def _load_from_cache(cached_volumes: list[dict]):
 def _perform_scan(paths: list[str]) -> int:
     """Helper to perform the actual scan and update the registries."""
     global _cache_path
-    
+
     # Determine cache location
     if paths:
         cache_dir = Path(paths[0]).expanduser().resolve()
@@ -489,12 +539,40 @@ def _perform_scan(paths: list[str]) -> int:
     _cache_path = cache_path
 
     t0 = time.time()
+
+    # Clear all catalogs/registries up front — every load path repopulates them.
+    from server.api.volumes import _path_registry, _metadata_registry
+    _catalog.clear()
+    _segmentation_catalog.clear()
+    _path_registry.clear()
+    _metadata_registry.clear()
+
+    # Fast path: cache exists and nothing under scan_paths is newer than the cache.
+    # Skips _discover_all entirely.
+    if paths and _cache_is_fresh(cache_path, paths):
+        try:
+            with open(cache_path) as f:
+                cache = json.load(f)
+            cached_volumes = cache.get("volumes", [])
+            if cached_volumes:
+                t1 = time.time()
+                cat, seg_cat, _ = _load_from_cache(cached_volumes)
+                _catalog.extend(cat)
+                _segmentation_catalog.update(seg_cat)
+                print(f"Cache up-to-date, loading {len(_catalog)} volume(s) (skipping scan) in {time.time() - t1:.2f}s")
+                return len(_catalog)
+        except Exception as e:
+            print(f"Fast-path cache read failed ({e}), falling back to scan")
+            # Fall through to full scan below. Re-clear in case partial load happened.
+            _catalog.clear()
+            _segmentation_catalog.clear()
+            _path_registry.clear()
+            _metadata_registry.clear()
+
+    # Slow path: full discovery + key-based cache check
     print("Scanning for volumes...")
     entries = _discover_all(paths)
 
-    _catalog.clear()
-    _segmentation_catalog.clear()
-    
     if not entries:
         print("No volumes found in provided paths")
         return 0
@@ -513,18 +591,12 @@ def _perform_scan(paths: list[str]) -> int:
     else:
         print("Registering volumes...")
         t1 = time.time()
-        
-        # We need to clear the _path_registry in the volumes module if we are doing a fresh re-register
-        from server.api.volumes import _path_registry, _metadata_registry
-        _path_registry.clear()
-        _metadata_registry.clear()
-            
         cat, seg_cat, path_reg = _register_entries(entries)
         _catalog.extend(cat)
         _segmentation_catalog.update(seg_cat)
         print(f"Registered {len(_catalog)} volume(s) in {time.time() - t1:.1f}s")
         _save_cache(cache_path, cache_key, _catalog, _segmentation_catalog, path_reg)
-        
+
     return len(_catalog)
 
 

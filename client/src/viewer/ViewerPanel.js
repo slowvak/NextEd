@@ -654,7 +654,7 @@ export class ViewerPanel {
     this.state.regionGrowSeed = [targetX, targetY, targetZ];
     this.state.regionGrowMean = mean;
     this.state.regionGrowAxis = this.axis;
-    this.state.executeRegionGrow = () => this._applyRegionGrow(is3D);
+    this.state.executeRegionGrow = () => this._runRegionGrow(is3D);
 
     const label = this.state.labels.get(this.state.activeLabel);
     if (label && label.regionGrowMin !== undefined && label.regionGrowMax !== undefined) {
@@ -723,7 +723,31 @@ export class ViewerPanel {
     }
     
     // The apply function reads the latest regionGrowMin/Max from state
-    this._applyRegionGrow();
+    this._runRegionGrow(is3D);
+  }
+
+  /**
+   * Run a region grow, showing a wait cursor for 3D operations (which can be slow).
+   * Uses double-requestAnimationFrame so the browser paints the cursor before the
+   * synchronous BFS blocks the main thread.
+   * @param {boolean} [is3D=false]
+   */
+  _runRegionGrow(is3D = false) {
+    if (is3D) {
+      document.body.style.cursor = 'wait';
+      this.canvas.style.cursor = 'wait';
+      // Two rAF frames: first lets the style change reach the compositor,
+      // second ensures the repaint actually occurs before we block.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          this._applyRegionGrow(true);
+          document.body.style.cursor = '';
+          this.canvas.style.cursor = '';
+        });
+      });
+    } else {
+      this._applyRegionGrow(false);
+    }
   }
 
   /**

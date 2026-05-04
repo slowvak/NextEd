@@ -86,7 +86,11 @@
       "Bash(curl -s -w \"\\\\nHTTP %{http_code}\" -X POST http://localhost:8000/api/v1/config/browse-folder)",
       "Bash(curl:*)",
       "Bash(lsof -iTCP -sTCP:LISTEN -P)",
-      "Bash(osascript -e 'POSIX path of \\(choose folder with prompt \"Test\"\\)')"
+      "Bash(osascript -e 'POSIX path of \\(choose folder with prompt \"Test\"\\)')",
+      "Bash(ps *)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(/Users/bje/repos/Sigma/server/.venv/bin/python *)",
+      "Bash(lsof -iTCP:8050 -sTCP:LISTEN)"
     ]
   }
 }
