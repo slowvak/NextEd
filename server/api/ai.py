@@ -58,6 +58,8 @@ async def run_model(request: Request):
     body = await request.json()
     volume_id = body.get("volume_id")
     model_id = body.get("model_id")
+    start_slice = body.get("start_slice")
+    end_slice = body.get("end_slice")
 
     if not volume_id or not model_id:
         raise HTTPException(status_code=400, detail="volume_id and model_id required")
@@ -88,6 +90,8 @@ async def run_model(request: Request):
         "model_config": model_cfg,
         "result": None,
         "error": None,
+        "start_slice": start_slice,
+        "end_slice": end_slice,
     }
 
     # Run inference in background
@@ -136,6 +140,10 @@ async def _run_inference(job_id: str):
             # Build multipart request
             files = {"image": ("input.nii.gz", open(input_path, "rb"), "application/gzip")}
             form_data = {"weights": model_cfg.get("weights", "")}
+            if job.get("start_slice") is not None:
+                form_data["start_slice"] = str(job["start_slice"])
+            if job.get("end_slice") is not None:
+                form_data["end_slice"] = str(job["end_slice"])
 
             # If model accepts labels and we have seg data cached, send it
             if model_cfg.get("accepts_labels") and volume_id in _seg_upload_cache:
