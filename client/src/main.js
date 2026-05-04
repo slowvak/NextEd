@@ -1503,6 +1503,50 @@ async function _showAIModelPicker(state, metadata) {
 
       const model = models.find(m => m.id === modelId);
 
+      // Show slice-range dialog before running inference
+      const totalSlices = state.dims[2];
+      const sliceOverlay = document.createElement('div');
+      sliceOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:1100;display:flex;align-items:center;justify-content:center;';
+      sliceOverlay.innerHTML = `
+        <div style="background:#1e1e1e;padding:24px;border-radius:8px;width:320px;border:1px solid #3a3a3a;box-shadow:0 10px 30px rgba(0,0,0,0.5);color:#e0e0e0;">
+          <h3 style="margin-top:0;font-size:16px;margin-bottom:16px;">Slice Range</h3>
+          <div style="display:flex;gap:16px;margin-bottom:20px;">
+            <label style="flex:1;font-size:13px;">
+              Start slice
+              <input id="sr-start" type="number" min="0" max="${totalSlices - 1}" value="0"
+                     style="display:block;width:100%;margin-top:4px;padding:6px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;box-sizing:border-box;">
+            </label>
+            <label style="flex:1;font-size:13px;">
+              End slice
+              <input id="sr-end" type="number" min="1" max="${totalSlices}" value="${totalSlices}"
+                     style="display:block;width:100%;margin-top:4px;padding:6px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;box-sizing:border-box;">
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button id="sr-cancel" style="padding:6px 16px;background:none;border:1px solid #a0a0a0;color:#a0a0a0;border-radius:4px;cursor:pointer;">Cancel</button>
+            <button id="sr-run" style="padding:6px 16px;background:#4a9eff;border:none;color:#fff;border-radius:4px;cursor:pointer;font-weight:600;">Run</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(sliceOverlay);
+
+      const sliceRange = await new Promise((resolve) => {
+        sliceOverlay.querySelector('#sr-run').addEventListener('click', () => {
+          const startSlice = parseInt(sliceOverlay.querySelector('#sr-start').value, 10);
+          const endSlice = parseInt(sliceOverlay.querySelector('#sr-end').value, 10);
+          resolve({ startSlice, endSlice });
+        });
+        sliceOverlay.querySelector('#sr-cancel').addEventListener('click', () => {
+          resolve(null);
+        });
+      });
+
+      document.body.removeChild(sliceOverlay);
+
+      if (!sliceRange) return;
+
+      const { startSlice, endSlice } = sliceRange;
+
       // Disable all options
       modal.querySelectorAll('.ai-model-option').forEach(o => {
         o.style.pointerEvents = 'none';
@@ -1532,7 +1576,7 @@ async function _showAIModelPicker(state, metadata) {
         const runResp = await fetch('/api/v1/ai/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ volume_id: metadata.id, model_id: modelId }),
+          body: JSON.stringify({ volume_id: metadata.id, model_id: modelId, start_slice: startSlice, end_slice: endSlice }),
         });
         const { job_id } = await runResp.json();
 
