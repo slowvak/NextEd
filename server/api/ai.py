@@ -36,22 +36,26 @@ def _load_config() -> dict:
 
 @router.get("/models")
 async def list_models():
-    """Return available AI models by querying SigmaServer's /models endpoint."""
+    """Return available AI models by querying SigmaServer's /models endpoint.
+
+    Returns null if the server is not configured or unreachable (so the client
+    can prompt for host/port), or a list (possibly empty) if the server responded.
+    """
     import httpx
 
     config = _load_config()
     server_url = config.get("server", "").rstrip("/")
     if not server_url:
-        return []
+        return None
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{server_url}/models")
             if resp.status_code == 200:
                 return resp.json()
+            return None
     except Exception:
-        pass
-    return []
+        return None
 
 
 @router.post("/run")
@@ -84,11 +88,22 @@ async def run_model(request: Request):
     if volume_id not in _volume_cache:
         raise HTTPException(status_code=400, detail="Volume not loaded")
 
-    # Find model config
+    # Find model config — prefer config.ai.models, fall back to SigmaServer's /models
     config = _load_config()
     model_cfg = next((m for m in config.get("models", []) if m["id"] == model_id), None)
     if not model_cfg:
-        raise HTTPException(status_code=404, detail=f"Model {model_id} not found")
+        import httpx
+        server_url = config.get("server", "").rstrip("/")
+        if server_url:
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(f"{server_url}/models")
+                    if resp.status_code == 200:
+                        model_cfg = next((m for m in resp.json() if m["id"] == model_id), None)
+            except Exception:
+                pass
+    if not model_cfg:
+        raise HTTPException(status_code=404, detail=f"Model {model_id} not found in config or SigmaServer")
 
     # Create job
     job_id = str(uuid.uuid4())[:8]

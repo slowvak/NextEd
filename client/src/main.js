@@ -1428,18 +1428,89 @@ async function _runTotalSegmentator(state, metadata) {
   }
 }
 
+async function _promptAIServerHostPort() {
+  // Returns true if the user saved new host/port, false if cancelled.
+  const configResp = await fetch('/api/v1/config').catch(() => null);
+  const config = configResp ? await configResp.json().catch(() => ({})) : {};
+  const currentUrl = config.ai?.server || 'http://localhost:8050';
+
+  let defaultHost = 'localhost';
+  let defaultPort = '8050';
+  try {
+    const u = new URL(currentUrl);
+    defaultHost = u.hostname;
+    defaultPort = u.port || '8050';
+  } catch (_) { /* ignore malformed URL */ }
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:center;justify-content:center;';
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#1e1e1e;padding:24px;border-radius:8px;width:340px;border:1px solid #3a3a3a;box-shadow:0 10px 30px rgba(0,0,0,0.5);color:#e0e0e0;';
+    modal.innerHTML = `
+      <h2 style="margin-top:0;font-size:16px;margin-bottom:8px;">AI Server Unreachable</h2>
+      <p style="font-size:13px;color:#a0a0a0;margin:0 0 16px;">Enter the host and port for the AI inference server.</p>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <div style="flex:1;">
+          <label style="font-size:12px;color:#a0a0a0;display:block;margin-bottom:4px;">Host</label>
+          <input id="ai-host" type="text" value="${defaultHost}"
+            style="width:100%;box-sizing:border-box;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;padding:6px 8px;font-size:13px;">
+        </div>
+        <div style="width:80px;">
+          <label style="font-size:12px;color:#a0a0a0;display:block;margin-bottom:4px;">Port</label>
+          <input id="ai-port" type="text" value="${defaultPort}"
+            style="width:100%;box-sizing:border-box;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;padding:6px 8px;font-size:13px;">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="ai-hp-cancel" style="padding:6px 16px;background:none;border:1px solid #555;color:#a0a0a0;border-radius:4px;cursor:pointer;font-size:13px;">Cancel</button>
+        <button id="ai-hp-save" style="padding:6px 16px;background:#4a9eff;border:none;color:#fff;border-radius:4px;cursor:pointer;font-size:13px;">Save &amp; Retry</button>
+      </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const close = () => { if (overlay.parentNode) document.body.removeChild(overlay); };
+
+    modal.querySelector('#ai-hp-cancel').addEventListener('click', () => { close(); resolve(false); });
+    modal.querySelector('#ai-hp-save').addEventListener('click', async () => {
+      const host = modal.querySelector('#ai-host').value.trim();
+      const port = modal.querySelector('#ai-port').value.trim();
+      if (!host || !port) return;
+      const newUrl = `http://${host}:${port}`;
+      const updated = { ...config, ai: { ...(config.ai || {}), server: newUrl } };
+      await fetch('/api/v1/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => {});
+      close();
+      resolve(true);
+    });
+  });
+}
+
 async function _showAIModelPicker(state, metadata) {
-  // Fetch available models
+  // Fetch available models — null means server is unreachable or not configured
   let models;
   try {
     const resp = await fetch('/api/v1/ai/models');
     models = await resp.json();
   } catch (e) {
-    alert('Could not load AI models: ' + e.message);
-    return;
+    models = null;
   }
 
-  if (!models) models = [];
+  if (models === null) {
+    const saved = await _promptAIServerHostPort();
+    if (!saved) return;
+    try {
+      const resp = await fetch('/api/v1/ai/models');
+      models = await resp.json();
+    } catch (e) { /* ignore */ }
+    if (!models) models = [];
+  }
 
   // Build modal
   const overlay = document.createElement('div');

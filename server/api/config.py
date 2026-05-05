@@ -26,29 +26,8 @@ DEFAULT_CONFIG = {
         "5": "Label 5"
     },
     "ai": {
-        "server": "http://localhost:8080",
-        "models": [
-            {
-                "id": "totalsegmentator",
-                "name": "TotalSegmentator",
-                "description": "104-structure CT segmentation (fast mode)",
-                "modality": ["CT"],
-                "endpoint": "/predict",
-                "weights": "totalsegmentator_v2",
-                "accepts_labels": False,
-                "labels": []
-            },
-            {
-                "id": "refine-seg",
-                "name": "Refine Segmentation",
-                "description": "Refines existing label boundaries using image features",
-                "modality": [],
-                "endpoint": "/predict",
-                "weights": "refine_v1",
-                "accepts_labels": True,
-                "labels": []
-            }
-        ]
+        "server": "http://localhost:8050",
+        "models": []
     }
 }
 

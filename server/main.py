@@ -558,9 +558,9 @@ def main():
     # Scan runs in lifespan (background thread) so server starts accepting requests immediately
     app.state._scan_paths = paths
 
-    print(f"\nStarting server on http://localhost:8050")
+    print(f"\nStarting server on http://localhost:8060")
     print("Volume data will be loaded on demand when opened in the viewer.")
-    uvicorn.run(app, host="0.0.0.0", port=8050)
+    uvicorn.run(app, host="0.0.0.0", port=8060)
 
 
 if __name__ == "__main__":

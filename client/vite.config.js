@@ -3,7 +3,7 @@ export default {
     port: 5275,
     proxy: {
       '/api': {
-        target: 'http://localhost:8050',
+        target: 'http://localhost:8060',
         changeOrigin: true,
         ws: true,
         timeout: 0,

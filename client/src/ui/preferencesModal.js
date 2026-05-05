@@ -136,17 +136,40 @@ export async function openPreferencesModal() {
   });
   form.appendChild(labelSec);
 
-  // 4. AI Models Section
+  // 4. AI Configuration Section
   const aiSec = createSection('AI Configuration');
   const aiServerInput = document.createElement('input');
   aiServerInput.type = 'text';
-  aiServerInput.value = configData.ai?.server || 'http://localhost:8080';
+  aiServerInput.value = configData.ai?.server || 'http://localhost:8050';
   aiSec.appendChild(createInputRow('AI Server URL:', aiServerInput));
 
-  const aiModelsInput = document.createElement('textarea');
-  aiModelsInput.rows = 8;
-  aiModelsInput.value = JSON.stringify(configData.ai?.models || [], null, 2);
-  aiSec.appendChild(createInputRow('Models (JSON Format):', aiModelsInput));
+  // Live model list from SigmaServer
+  const modelsRow = document.createElement('div');
+  modelsRow.style.cssText = 'display:flex;margin-bottom:0.5rem;align-items:flex-start;';
+  const modelsLabel = document.createElement('label');
+  modelsLabel.textContent = 'Available Models:';
+  modelsLabel.style.cssText = 'width:180px;flex-shrink:0;padding-top:4px;';
+  const modelsDisplay = document.createElement('div');
+  modelsDisplay.style.cssText = 'flex-grow:1;padding:0.5rem;background:#2a2a2a;border:1px solid #555;border-radius:4px;font-size:13px;min-height:40px;';
+  modelsDisplay.textContent = 'Loading…';
+  modelsRow.appendChild(modelsLabel);
+  modelsRow.appendChild(modelsDisplay);
+  aiSec.appendChild(modelsRow);
+
+  fetch('/api/v1/ai/models').then(r => r.json()).then(models => {
+    if (!models || models.length === 0) {
+      modelsDisplay.style.color = '#a0a0a0';
+      modelsDisplay.textContent = 'No models available — is SigmaServer running?';
+    } else {
+      modelsDisplay.innerHTML = models.map(m =>
+        `<div style="margin-bottom:4px;"><span style="color:#4a9eff;font-weight:600;">${m.name}</span> <span style="color:#a0a0a0;font-size:12px;">${m.description || ''}</span></div>`
+      ).join('');
+    }
+  }).catch(() => {
+    modelsDisplay.style.color = '#ff6b6b';
+    modelsDisplay.textContent = 'Could not reach AI server.';
+  });
+
   form.appendChild(aiSec);
 
   // Actions
@@ -165,22 +188,13 @@ export async function openPreferencesModal() {
   saveBtn.textContent = 'Save Configuration';
   saveBtn.className = 'btn btn-primary';
   saveBtn.onclick = async () => {
-    // Reconstruct config
-    let parsedModels = [];
-    try {
-      parsedModels = JSON.parse(aiModelsInput.value);
-    } catch (err) {
-      alert("Invalid JSON in AI Models field.");
-      return;
-    }
-
     const newConfig = {
       source_directory: sourceInput.value,
       window_level_presets: {},
       default_labels: {},
       ai: {
         server: aiServerInput.value,
-        models: parsedModels
+        models: configData.ai?.models || []
       }
     };
 
