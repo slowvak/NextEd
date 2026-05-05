@@ -91,7 +91,6 @@ async def run_model(request: Request):
     Returns: { "job_id": "uuid" }
     """
     from server.api.volumes import _volume_cache, _ensure_loaded, _path_registry
-    from server.main import _catalog
 
     body = await request.json()
     volume_id = body.get("volume_id")
@@ -102,9 +101,8 @@ async def run_model(request: Request):
     if not volume_id or not model_id:
         raise HTTPException(status_code=400, detail="volume_id and model_id required")
 
-    # Validate volume exists and is loaded
-    vol_meta = next((v for v in _catalog if v.id == volume_id), None)
-    if not vol_meta:
+    # Validate volume exists and load it
+    if volume_id not in _path_registry:
         raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
 
     _ensure_loaded(volume_id)

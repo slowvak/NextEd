@@ -1391,43 +1391,6 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   state.subscribe(renderLabels);
 }
 
-async function _runTotalSegmentator(state, metadata) {
-  if (!metadata || !metadata.id) {
-    alert('No volume loaded.');
-    return;
-  }
-  const confirmed = window.confirm(
-    'This will download the volume as NIfTI and open TotalSegmentator.\n\n' +
-    'Upload the downloaded file at totalsegmentator.com to run segmentation.'
-  );
-  if (!confirmed) return;
-
-  // Open TotalSegmentator first (needs user-gesture context; fetch below is async)
-  const tsWin = window.open('https://totalsegmentator.com', '_blank', 'noopener,noreferrer');
-  if (!tsWin) alert('Popup blocked — please allow popups for this site.');
-
-  // Fetch bytes then create a Blob URL so the download attribute works reliably
-  try {
-    const resp = await fetch(`/api/v1/volumes/${metadata.id}/nifti`);
-    if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
-
-    const cd = resp.headers.get('Content-Disposition') || '';
-    const match = cd.match(/filename="([^"]+)"/);
-    const filename = match ? match[1] : `${metadata.name || 'volume'}.nii`;
-
-    const blob = await resp.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-  } catch (err) {
-    alert('Failed to download NIfTI: ' + err.message);
-  }
-}
 
 async function _promptAIServerHostPort() {
   // Returns true if the user saved new host/port, false if cancelled.
@@ -1523,15 +1486,6 @@ async function _showAIModelPicker(state, metadata) {
   let html = '<h2 style="margin-top:0;font-size:18px;margin-bottom:16px;">Run AI Model</h2>';
   html += '<div style="display:flex;flex-direction:column;gap:8px;">';
 
-  // TotalSegmentator — always present as a built-in option
-  html += `
-    <div class="ai-model-option" data-model-id="__totalsegmentator__"
-         style="padding:12px;border:1px solid #3a3a3a;border-radius:6px;cursor:pointer;transition:background 0.1s;">
-      <div style="font-weight:600;font-size:14px;">TotalSegmentator</div>
-      <div style="font-size:12px;color:#a0a0a0;margin-top:4px;">Download volume as NIfTI and open totalsegmentator.com</div>
-    </div>
-  `;
-
   for (const model of models) {
     const acceptsLabel = model.accepts_labels ? ' (uses existing labels)' : '';
     html += `
@@ -1583,13 +1537,6 @@ async function _showAIModelPicker(state, metadata) {
     opt.addEventListener('mouseleave', () => { opt.style.background = ''; });
     opt.addEventListener('click', async () => {
       const modelId = opt.getAttribute('data-model-id');
-
-      // TotalSegmentator is a special built-in action
-      if (modelId === '__totalsegmentator__') {
-        close();
-        _runTotalSegmentator(state, metadata);
-        return;
-      }
 
       const model = models.find(m => m.id === modelId);
 

@@ -52,7 +52,7 @@ ok "Ports cleared."
 
 log "Starting SigmaServer on port $AI_PORT …"
 cd "$SIGMA_SERVER_DIR"
-"$SCRIPT_DIR/server/.venv/bin/python" -u server.py --port "$AI_PORT" >"$SCRIPT_DIR/sigmaserver.log" 2>&1 &
+"$SIGMA_SERVER_DIR/.venv/bin/python" -u server.py --port "$AI_PORT" >"$SCRIPT_DIR/sigmaserver.log" 2>&1 &
 AI_PID=$!
 ok "SigmaServer launched (PID $AI_PID) — logs → sigmaserver.log"
 cd "$SCRIPT_DIR"
@@ -80,7 +80,7 @@ cd "$SCRIPT_DIR"
 wait_for_port() {
   local label="$1" port="$2"
   printf "\033[1;34m[sigma]\033[0m Waiting for %-14s on http://localhost:%s" "$label" "$port"
-  for _ in $(seq 1 30); do
+  for _ in $(seq 1 120); do
     if port_in_use "$port"; then
       printf " ✓\n"
       return 0
@@ -89,7 +89,7 @@ wait_for_port() {
     sleep 1
   done
   printf "\n"
-  warn "$label did not become ready within 30 s — check logs for errors."
+  warn "$label did not become ready within 120 s — check logs for errors."
   return 1
 }
 
