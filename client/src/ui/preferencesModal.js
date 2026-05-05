@@ -170,6 +170,99 @@ export async function openPreferencesModal() {
     modelsDisplay.textContent = 'Could not reach AI server.';
   });
 
+  // Upload Model UI
+  const uploadRow = document.createElement('div');
+  uploadRow.style.display = 'flex';
+  uploadRow.style.alignItems = 'center';
+  uploadRow.style.gap = '10px';
+  uploadRow.style.marginTop = '1rem';
+  uploadRow.style.paddingTop = '1rem';
+  uploadRow.style.borderTop = '1px solid #444';
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.onnx,.safetensors,.pth,.pt,.json';
+  fileInput.multiple = true;
+  fileInput.style.display = 'none';
+
+  const uploadBtn = document.createElement('button');
+  uploadBtn.textContent = 'Upload Custom Model (Select both Model & Config.json)';
+  uploadBtn.className = 'btn';
+  uploadBtn.type = 'button';
+
+  const uploadStatus = document.createElement('span');
+  uploadStatus.style.fontSize = '13px';
+  uploadStatus.style.color = '#a0a0a0';
+
+  uploadBtn.onclick = () => fileInput.click();
+
+  fileInput.onchange = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    let modelFile = null;
+    let configFile = null;
+
+    for (const f of files) {
+      if (f.name.endsWith('.json')) {
+        configFile = f;
+      } else if (f.name.endsWith('.onnx') || f.name.endsWith('.safetensors') || f.name.endsWith('.pth') || f.name.endsWith('.pt')) {
+        modelFile = f;
+      }
+    }
+
+    if (!modelFile) {
+      uploadStatus.textContent = 'Error: No valid model file selected.';
+      uploadStatus.style.color = '#ff6b6b';
+      return;
+    }
+
+    if ((modelFile.name.endsWith('.safetensors') || modelFile.name.endsWith('.pth') || modelFile.name.endsWith('.pt')) && !configFile) {
+      uploadStatus.textContent = 'Error: Please select config.json ALONG WITH the model file.';
+      uploadStatus.style.color = '#ff6b6b';
+      fileInput.value = '';
+      return;
+    }
+
+    performUpload(modelFile, configFile);
+  };
+
+  async function performUpload(file, configFile) {
+    uploadStatus.textContent = `Uploading ${file.name}...`;
+    uploadStatus.style.color = '#4a9eff';
+    uploadBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (configFile) formData.append('config', configFile);
+
+    try {
+      const res = await fetch('/api/v1/ai/upload-model', { method: 'POST', body: formData });
+
+      if (!res.ok) {
+        const textData = await res.text();
+        let errMsg = 'Upload failed';
+        try { errMsg = JSON.parse(textData).detail || errMsg; } catch (e) { errMsg = textData || errMsg; }
+        throw new Error(errMsg);
+      }
+
+      uploadStatus.textContent = 'Success! Reload UI.';
+      uploadStatus.style.color = '#4caf50';
+    } catch (err) {
+      console.error(err);
+      uploadStatus.textContent = `Error: ${err.message}`;
+      uploadStatus.style.color = '#ff6b6b';
+    } finally {
+      uploadBtn.disabled = false;
+      fileInput.value = '';
+    }
+  }
+
+  uploadRow.appendChild(fileInput);
+  uploadRow.appendChild(uploadBtn);
+  uploadRow.appendChild(uploadStatus);
+  aiSec.appendChild(uploadRow);
+
   form.appendChild(aiSec);
 
   // Actions

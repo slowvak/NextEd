@@ -143,7 +143,7 @@ async function initTaskMode(taskParams) {
   const header = document.createElement('header');
   header.className = 'app-header';
   const h1 = document.createElement('h1');
-  h1.textContent = 'NextEd';
+  h1.textContent = 'Sigma';
   header.appendChild(h1);
   app.appendChild(header);
 
@@ -763,6 +763,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
         <button class="tool-option compact-btn" data-tool="crosshair" data-label="⌖ Cursor" style="width:100%;text-align:left;border:none;border-radius:0;flex:unset;">⌖ Cursor</button>
         <button class="tool-option compact-btn" data-tool="paint" data-label="🖌 Paint" style="width:100%;text-align:left;border:none;border-radius:0;flex:unset;">🖌 Paint</button>
         <button class="tool-option compact-btn" data-tool="region-grow" data-label="⬡ Grow2D" style="width:100%;text-align:left;border:none;border-radius:0;flex:unset;">⬡ Grow2D</button>
+        <button class="tool-option compact-btn" data-tool="region-grow-3d" data-label="⬡ Grow3D" style="width:100%;text-align:left;border:none;border-radius:0;flex:unset;">⬡ Grow3D</button>
       </div>
     </div>
   `;
@@ -1208,7 +1209,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   rgMaxInput.addEventListener('change', commitRGInputs);
 
   const updateToolPlanes = () => {
-    if (state.activeTool === 'region-grow') {
+    if (state.activeTool === 'region-grow' || state.activeTool === 'region-grow-3d') {
       rgSec.style.display = 'flex';
       constrSec.style.display = 'none';
     } else {
@@ -1542,6 +1543,25 @@ async function _showAIModelPicker(state, metadata) {
     `;
   }
   html += '</div>';
+
+  html += `
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #3a3a3a;">
+      <div style="font-size:13px;margin-bottom:8px;font-weight:600;">Result Strategy</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px;">
+        <input type="radio" name="ai-strategy" value="replace" checked>
+        Replace current labels (clears existing)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="radio" name="ai-strategy" value="merge">
+        Merge with current labels (adds new predictions)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="radio" name="ai-strategy" value="and">
+        Intersect with current labels (ANDing)
+      </label>
+    </div>
+  `;
+
   html += '<div id="ai-progress" style="display:none;margin-top:16px;">';
   html += '  <div style="font-size:13px;margin-bottom:8px;" id="ai-status-text">Starting...</div>';
   html += '  <div style="background:#3a3a3a;border-radius:4px;height:8px;overflow:hidden;">';
@@ -1573,6 +1593,50 @@ async function _showAIModelPicker(state, metadata) {
 
       const model = models.find(m => m.id === modelId);
 
+      // Show slice-range dialog before running inference
+      const totalSlices = state.dims[2];
+      const sliceOverlay = document.createElement('div');
+      sliceOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:1100;display:flex;align-items:center;justify-content:center;';
+      sliceOverlay.innerHTML = `
+        <div style="background:#1e1e1e;padding:24px;border-radius:8px;width:320px;border:1px solid #3a3a3a;box-shadow:0 10px 30px rgba(0,0,0,0.5);color:#e0e0e0;">
+          <h3 style="margin-top:0;font-size:16px;margin-bottom:16px;">Slice Range</h3>
+          <div style="display:flex;gap:16px;margin-bottom:20px;">
+            <label style="flex:1;font-size:13px;">
+              Start slice
+              <input id="sr-start" type="number" min="0" max="${totalSlices - 1}" value="0"
+                     style="display:block;width:100%;margin-top:4px;padding:6px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;box-sizing:border-box;">
+            </label>
+            <label style="flex:1;font-size:13px;">
+              End slice
+              <input id="sr-end" type="number" min="1" max="${totalSlices}" value="${totalSlices}"
+                     style="display:block;width:100%;margin-top:4px;padding:6px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;box-sizing:border-box;">
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button id="sr-cancel" style="padding:6px 16px;background:none;border:1px solid #a0a0a0;color:#a0a0a0;border-radius:4px;cursor:pointer;">Cancel</button>
+            <button id="sr-run" style="padding:6px 16px;background:#4a9eff;border:none;color:#fff;border-radius:4px;cursor:pointer;font-weight:600;">Run</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(sliceOverlay);
+
+      const sliceRange = await new Promise((resolve) => {
+        sliceOverlay.querySelector('#sr-run').addEventListener('click', () => {
+          const startSlice = parseInt(sliceOverlay.querySelector('#sr-start').value, 10);
+          const endSlice = parseInt(sliceOverlay.querySelector('#sr-end').value, 10);
+          resolve({ startSlice, endSlice });
+        });
+        sliceOverlay.querySelector('#sr-cancel').addEventListener('click', () => {
+          resolve(null);
+        });
+      });
+
+      document.body.removeChild(sliceOverlay);
+
+      if (!sliceRange) return;
+
+      const { startSlice, endSlice } = sliceRange;
+
       // Disable all options
       modal.querySelectorAll('.ai-model-option').forEach(o => {
         o.style.pointerEvents = 'none';
@@ -1602,7 +1666,7 @@ async function _showAIModelPicker(state, metadata) {
         const runResp = await fetch('/api/v1/ai/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ volume_id: metadata.id, model_id: modelId }),
+          body: JSON.stringify({ volume_id: metadata.id, model_id: modelId, start_slice: startSlice, end_slice: endSlice }),
         });
         const { job_id } = await runResp.json();
 
@@ -1638,17 +1702,48 @@ async function _showAIModelPicker(state, metadata) {
 
         const labelsJson = resultResp.headers.get('X-AI-Labels');
         const aiLabels = labelsJson ? JSON.parse(labelsJson) : [];
+        const reportJson = resultResp.headers.get('X-AI-Report');
+        const aiReport = reportJson ? JSON.parse(reportJson) : null;
 
-        // Replace segmentation volume
-        if (!state.segVolume || state.segVolume.length !== maskData.length) {
-          const [dx, dy, dz] = state.dims;
-          state.segVolume = new Uint8Array(dx * dy * dz);
-          state.segDims = [...state.dims];
+        const strategy = modal.querySelector('input[name="ai-strategy"]:checked').value;
+        const [dx, dy, dz] = state.dims;
+        const volSize = dx * dy * dz;
+
+        if (strategy === 'replace') {
+          // Replace segmentation volume
+          if (!state.segVolume || state.segVolume.length !== maskData.length) {
+            state.segVolume = new Uint8Array(volSize);
+            state.segDims = [...state.dims];
+          }
+          state.segVolume.set(maskData);
+          state.labels.clear();
+        } else if (strategy === 'merge') {
+          // Merge (OR) strategy
+          if (!state.segVolume) {
+            state.segVolume = new Uint8Array(volSize);
+            state.segDims = [...state.dims];
+          }
+          for (let i = 0; i < volSize; i++) {
+            if (maskData[i] !== 0) {
+              state.segVolume[i] = maskData[i];
+            }
+          }
+        } else if (strategy === 'and') {
+          // Intersect (AND) strategy
+          if (!state.segVolume) {
+            state.segVolume = new Uint8Array(volSize);
+            state.segDims = [...state.dims];
+          }
+          for (let i = 0; i < volSize; i++) {
+            if (maskData[i] !== 0 && state.segVolume[i] !== 0) {
+              state.segVolume[i] = maskData[i];
+            } else {
+              state.segVolume[i] = 0;
+            }
+          }
         }
-        state.segVolume.set(maskData);
 
-        // Replace labels
-        state.labels.clear();
+        // Add/Update labels
         const { buildColorLUT } = await import('./viewer/overlayBlender.js');
 
         for (const lb of aiLabels) {
@@ -1678,7 +1773,7 @@ async function _showAIModelPicker(state, metadata) {
             { r: 255, g: 255, b: 0 }, { r: 0, g: 255, b: 255 }, { r: 255, g: 0, b: 255 },
           ];
           for (const v of uniqueVals) {
-            if (v === 0) continue;
+            if (v === 0 || state.labels.has(v)) continue;
             state.labels.set(v, {
               name: `Label ${v}`,
               value: v,
@@ -1698,6 +1793,11 @@ async function _showAIModelPicker(state, metadata) {
         state.notify();
         close();
 
+        // Show report if available
+        if (aiReport && Object.keys(aiReport).length > 0) {
+          setTimeout(() => _showAIReportModal(aiReport), 100);
+        }
+
       } catch (err) {
         statusText.textContent = `Error: ${err.message}`;
         statusText.style.color = '#ff6b6b';
@@ -1705,6 +1805,37 @@ async function _showAIModelPicker(state, metadata) {
       }
     });
   });
+}
+
+function _showAIReportModal(reportData) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:center;justify-content:center;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:#1e1e1e;padding:24px;border-radius:8px;width:500px;border:1px solid #3a3a3a;box-shadow:0 10px 30px rgba(0,0,0,0.5);color:#e0e0e0;max-height:80vh;display:flex;flex-direction:column;';
+
+  const title = document.createElement('h2');
+  title.textContent = 'AI Report';
+  title.style.margin = '0 0 16px 0';
+  title.style.fontSize = '18px';
+  modal.appendChild(title);
+
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'flex:1;overflow:auto;background:#2d2d2d;padding:12px;border-radius:4px;border:1px solid #444;font-size:12px;white-space:pre-wrap;';
+  pre.textContent = JSON.stringify(reportData, null, 2);
+  modal.appendChild(pre);
+
+  const actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;justify-content:flex-end;margin-top:16px;';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.className = 'btn btn-primary';
+  closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
+  actions.appendChild(closeBtn);
+  modal.appendChild(actions);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
 }
 
 function _showLabelEditPopup(state, val) {

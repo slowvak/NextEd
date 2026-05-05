@@ -309,6 +309,9 @@ export class ViewerPanel {
       } else if (this.state.activeTool === 'region-grow') {
         e.preventDefault();
         this._startRegionGrow(e);
+      } else if (this.state.activeTool === 'region-grow-3d') {
+        e.preventDefault();
+        this._startRegionGrow(e, true);
       } else {
         // Crosshair click+drag
         this._isDraggingCrosshair = true;
@@ -360,7 +363,7 @@ export class ViewerPanel {
 
     this.state.subscribe(() => {
         // Commit region grow diff if we switch tools
-        if (this.state.activeTool !== 'region-grow' && this._currentDiff && !this._isPainting) {
+        if (this.state.activeTool !== 'region-grow' && this.state.activeTool !== 'region-grow-3d' && this._currentDiff && !this._isPainting) {
             this._flushPendingDiff();
         }
     });
@@ -543,8 +546,10 @@ export class ViewerPanel {
 
   /**
    * Initialize a Region Grow session from a canvas click event.
+   * @param {MouseEvent} e
+   * @param {boolean} [is3D=false] - true for unrestricted 6-connected 3D grow
    */
-  _startRegionGrow(e) {
+  _startRegionGrow(e, is3D = false) {
     const hasRealLabels = [...this.state.labels.keys()].some(v => v !== 0);
 
     if (!hasRealLabels) {
@@ -649,30 +654,109 @@ export class ViewerPanel {
     this.state.regionGrowSeed = [targetX, targetY, targetZ];
     this.state.regionGrowMean = mean;
     this.state.regionGrowAxis = this.axis;
-    this.state.executeRegionGrow = () => this._applyRegionGrow();
+    this.state.executeRegionGrow = () => this._runRegionGrow(is3D);
 
     const label = this.state.labels.get(this.state.activeLabel);
     if (label && label.regionGrowMin !== undefined && label.regionGrowMax !== undefined) {
       this.state.setRegionGrowRange(label.regionGrowMin, label.regionGrowMax);
+    } else if (this.state.segVolume[seedIdx] === this.state.activeLabel) {
+      // Clicked on an existing label pixel with no stored range →
+      // derive min/max from label pixels: entire volume for 3D, current slice for 2D.
+      let sliceMin = Infinity;
+      let sliceMax = -Infinity;
+
+      if (is3D) {
+        for (let i = 0; i < this.state.segVolume.length; i++) {
+          if (this.state.segVolume[i] === this.state.activeLabel) {
+            const v = this.volume[i];
+            if (v < sliceMin) sliceMin = v;
+            if (v > sliceMax) sliceMax = v;
+          }
+        }
+      } else if (this.axis === 'axial') {
+        const z = fixedDepth;
+        for (let y = 0; y < dimY; y++) {
+          for (let x = 0; x < dimX; x++) {
+            if (this.state.segVolume[z * dimX * dimY + y * dimX + x] === this.state.activeLabel) {
+              const v = this.volume[z * dimX * dimY + y * dimX + x];
+              if (v < sliceMin) sliceMin = v;
+              if (v > sliceMax) sliceMax = v;
+            }
+          }
+        }
+      } else if (this.axis === 'coronal') {
+        const y = fixedDepth;
+        for (let z = 0; z < dimZ; z++) {
+          for (let x = 0; x < dimX; x++) {
+            if (this.state.segVolume[z * dimX * dimY + y * dimX + x] === this.state.activeLabel) {
+              const v = this.volume[z * dimX * dimY + y * dimX + x];
+              if (v < sliceMin) sliceMin = v;
+              if (v > sliceMax) sliceMax = v;
+            }
+          }
+        }
+      } else {
+        // sagittal
+        const x = fixedDepth;
+        for (let z = 0; z < dimZ; z++) {
+          for (let y = 0; y < dimY; y++) {
+            if (this.state.segVolume[z * dimX * dimY + y * dimX + x] === this.state.activeLabel) {
+              const v = this.volume[z * dimX * dimY + y * dimX + x];
+              if (v < sliceMin) sliceMin = v;
+              if (v > sliceMax) sliceMax = v;
+            }
+          }
+        }
+      }
+
+      if (!isFinite(sliceMin)) {
+        sliceMin = Math.min(mean - stdev, seedVal);
+        sliceMax = Math.max(mean + stdev, seedVal);
+      }
+
+      this.state.setRegionGrowRange(Math.round(sliceMin), Math.round(sliceMax));
     } else {
-      // Range = mean ± stdev, but always guaranteed to contain the seed pixel.
-      // Without this, a seed at a tissue boundary (outlier in its 5×5 patch) would
-      // fall outside mean±stdev and the BFS would reject it immediately.
+      // Unlabeled pixel with no stored range → mean ± stdev, clamped to include seed.
       const rangeMin = Math.round(Math.min(mean - stdev, seedVal));
       const rangeMax = Math.round(Math.max(mean + stdev, seedVal));
       this.state.setRegionGrowRange(rangeMin, rangeMax);
     }
     
     // The apply function reads the latest regionGrowMin/Max from state
-    this._applyRegionGrow();
+    this._runRegionGrow(is3D);
   }
 
   /**
-   * Apply Region Grow with current state parameters
+   * Run a region grow, showing a wait cursor for 3D operations (which can be slow).
+   * Uses double-requestAnimationFrame so the browser paints the cursor before the
+   * synchronous BFS blocks the main thread.
+   * @param {boolean} [is3D=false]
    */
-  _applyRegionGrow() {
+  _runRegionGrow(is3D = false) {
+    if (is3D) {
+      document.body.style.cursor = 'wait';
+      this.canvas.style.cursor = 'wait';
+      // Two rAF frames: first lets the style change reach the compositor,
+      // second ensures the repaint actually occurs before we block.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          this._applyRegionGrow(true);
+          document.body.style.cursor = '';
+          this.canvas.style.cursor = '';
+        });
+      });
+    } else {
+      this._applyRegionGrow(false);
+    }
+  }
+
+  /**
+   * Apply Region Grow with current state parameters.
+   * @param {boolean} [is3D=false] - true for unrestricted 6-connected 3D grow
+   */
+  _applyRegionGrow(is3D = false) {
     if (!this.state.regionGrowSeed || !this.volume || !this.state.segVolume) return;
-    
+
     // 1. Revert previous _currentDiff if it exists, so we start fresh from the seed.
     // Only revert pixels whose current value still matches what the grow wrote —
     // if another operation (e.g. paint) changed the pixel since, leave it alone.
@@ -684,17 +768,19 @@ export class ViewerPanel {
         }
       }
     }
-    
+
     const [sx, sy, sz] = this.state.regionGrowSeed;
     const { regionGrowMin, regionGrowMax, activeLabel, multiSlice } = this.state;
     const [dimX, dimY, dimZ] = this.dims;
     const sliceRange = Math.floor((multiSlice - 1) / 2);
 
-    // Compute depth bounds based on axis
-    let minD, maxD;
-    if (this.axis === 'axial') { minD = Math.max(0, sz - sliceRange); maxD = Math.min(dimZ - 1, sz + sliceRange); }
-    else if (this.axis === 'coronal') { minD = Math.max(0, sy - sliceRange); maxD = Math.min(dimY - 1, sy + sliceRange); }
-    else { minD = Math.max(0, sx - sliceRange); maxD = Math.min(dimX - 1, sx + sliceRange); }
+    // Compute depth bounds (2D mode only — 3D mode is unrestricted)
+    let minD = 0, maxD = Infinity;
+    if (!is3D) {
+      if (this.axis === 'axial') { minD = Math.max(0, sz - sliceRange); maxD = Math.min(dimZ - 1, sz + sliceRange); }
+      else if (this.axis === 'coronal') { minD = Math.max(0, sy - sliceRange); maxD = Math.min(dimY - 1, sy + sliceRange); }
+      else { minD = Math.max(0, sx - sliceRange); maxD = Math.min(dimX - 1, sx + sliceRange); }
+    }
 
     const visited = new Uint8Array(dimX * dimY * dimZ);
     const q = [[sx, sy, sz]];
@@ -705,14 +791,10 @@ export class ViewerPanel {
     visited[startIdx] = 1;
 
     // Debug: log seed state so we can diagnose why a grow might produce nothing
-    console.log(`[NextEd] regionGrow axis=${this.axis} seed=(${sx},${sy},${sz}) idx=${startIdx} vol=${this.volume[startIdx]} range=[${regionGrowMin},${regionGrowMax}] seg=${this.state.segVolume[startIdx]} activeLabel=${activeLabel}`);
+    console.log(`[NextEd] regionGrow${is3D ? '3D' : ''} axis=${this.axis} seed=(${sx},${sy},${sz}) idx=${startIdx} vol=${this.volume[startIdx]} range=[${regionGrowMin},${regionGrowMax}] seg=${this.state.segVolume[startIdx]} activeLabel=${activeLabel}`);
 
-    // 4-connectivity in-plane neighbors + depth for multi-slice
-    let neighbors;
-    if (this.axis === 'axial')    neighbors = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
-    else if (this.axis === 'coronal')  neighbors = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,1,0],[0,-1,0]];
-    else                               neighbors = [[0,1,0],[0,-1,0],[0,0,1],[0,0,-1],[1,0,0],[-1,0,0]];
-    // First 4 entries are in-plane; last 2 are depth (only used when multiSlice > 1)
+    // 6-connectivity neighbors: first 4 in-plane, last 2 depth
+    const neighbors = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 
     while (head < q.length) {
         const [cx, cy, cz] = q[head++];
@@ -731,20 +813,22 @@ export class ViewerPanel {
           this.state.segVolume[idx] = activeLabel;
         }
 
-        // Expand from both newly-labeled and already-same-labeled voxels
+        // Expand to all 6 neighbors; depth neighbors gated by sliceRange in 2D mode
         for (let i = 0; i < neighbors.length; i++) {
             const [dx, dy, dz] = neighbors[i];
-            // Skip depth neighbors when multiSlice == 1
-            if (i >= 4 && sliceRange === 0) continue;
+            // In 2D mode, skip depth neighbors when multiSlice == 1
+            if (!is3D && i >= 4 && sliceRange === 0) continue;
 
             const nx = cx + dx;
             const ny = cy + dy;
             const nz = cz + dz;
 
             if (nx < 0 || nx >= dimX || ny < 0 || ny >= dimY || nz < 0 || nz >= dimZ) continue;
-            if (this.axis === 'axial'    && (nz < minD || nz > maxD)) continue;
-            if (this.axis === 'coronal'  && (ny < minD || ny > maxD)) continue;
-            if (this.axis === 'sagittal' && (nx < minD || nx > maxD)) continue;
+            if (!is3D) {
+              if (this.axis === 'axial'    && (nz < minD || nz > maxD)) continue;
+              if (this.axis === 'coronal'  && (ny < minD || ny > maxD)) continue;
+              if (this.axis === 'sagittal' && (nx < minD || nx > maxD)) continue;
+            }
 
             const nIdx = nz * dimX * dimY + ny * dimX + nx;
             if (!visited[nIdx]) {

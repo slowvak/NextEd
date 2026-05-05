@@ -63,6 +63,9 @@ None yet.
 | 260409-h8h | Fix Region Grow button styling in updateActiveTool to use green tint for inactive state | 2026-04-09 | cc198a6 | [260409-h8h-fix-region-grow-button-styling-in-update](./quick/260409-h8h-fix-region-grow-button-styling-in-update/) |
 | 260413-l5j | Combine Cursor/Paint/Grow2D tool buttons into a single dropdown selector | 2026-04-13 | da07131 | [260413-l5j-combine-the-buttons-for-cursor-paint-reg](./quick/260413-l5j-combine-the-buttons-for-cursor-paint-reg/) |
 | 260413-lbs | Region Grow skips already-labeled voxels; BFS routes around existing labels | 2026-04-13 | 781b7ed | [260413-lbs-make-grow-2d-only-grow-add-pixels-that-a](./quick/260413-lbs-make-grow-2d-only-grow-add-pixels-that-a/) |
+| 260504-e4j | Grow2D click on existing label pixel derives range from slice intensities | 2026-05-04 | 6984eba | [260504-e4j-grow2d-click-on-same-label-pixel-uses-ex](./quick/260504-e4j-grow2d-click-on-same-label-pixel-uses-ex/) |
+| 260504-eao | Add Grow3D tool to dropdown below Grow2D: 6-connected 3D region grow with same label/min-max rules as Grow2D | 2026-05-04 | f4a7d15 | [260504-eao-add-grow3d-tool-to-dropdown-below-grow2d](./quick/260504-eao-add-grow3d-tool-to-dropdown-below-grow2d/) |
+| 260504-m9e | Add slice-range dialog before AI inference; start_slice/end_slice forwarded to AI server | 2026-05-04 | 4c6f079 | [260504-m9e-ai-tool-slice-range-dialog](./quick/260504-m9e-ai-tool-slice-range-dialog/) |
 
 ### Blockers/Concerns
 
@@ -72,7 +75,7 @@ None yet.
 
 ## Session Continuity
 
-Last activity: 2026-04-13 - Completed quick task 260413-lbs: Region Grow skips already-labeled voxels; BFS routes around existing labels
-Last session: 2026-04-06T18:13:30.005Z
+Last activity: 2026-05-04 - Completed quick task 260504-m9e: Add slice-range dialog before AI inference
+Last session: 2026-05-04T21:07:24Z
 Stopped at: Completed 08-01-PLAN.md
 Resume file: None
