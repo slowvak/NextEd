@@ -1026,7 +1026,10 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   aiBtn.textContent = '🤖 AI';
   aiBtn.title = 'Run AI model on current volume';
   aiBtn.style.flex = '1';
-  aiBtn.addEventListener('click', () => _showAIModelPicker(state, metadata));
+  aiBtn.addEventListener('click', () => _showAIModelPicker(state, metadata, () => {
+    _maskLoaded = true;
+    _showSaveBtn();
+  }));
   aiRow.appendChild(aiBtn);
   toolPanel.appendChild(aiRow);
 
@@ -1456,7 +1459,7 @@ async function _promptAIServerHostPort() {
   });
 }
 
-async function _showAIModelPicker(state, metadata) {
+async function _showAIModelPicker(state, metadata, onMaskApplied) {
   // Fetch available models — null means server is unreachable or not configured
   let models;
   try {
@@ -1737,7 +1740,34 @@ async function _showAIModelPicker(state, metadata) {
           }
         }
 
+        // Ensure overlay is visible after applying result
+        if (state.overlayOpacity === 0) {
+          state.overlayOpacity = 0.5;
+        }
+
+        // Jump to a slice that has segmentation so the overlay is immediately visible
+        {
+          const [sdx, sdy, sdz] = state.dims;
+          const sliceSize = sdx * sdy;
+          for (let z = 0; z < sdz; z++) {
+            let found = false;
+            const offset = z * sliceSize;
+            for (let i = 0; i < sliceSize; i++) {
+              if (state.segVolume[offset + i] !== 0) { found = true; break; }
+            }
+            if (found) {
+              state.cursor[2] = z;
+              break;
+            }
+          }
+        }
+
+        const nonZeroCount = state.segVolume ? state.segVolume.reduce((n, v) => n + (v !== 0 ? 1 : 0), 0) : 0;
+        console.log(`[NextEd] AI result applied: ${nonZeroCount} non-zero voxels, ${state.labels.size - 1} labels`);
+
+        state.segVersion++;
         state.notify();
+        onMaskApplied?.();
         close();
 
         // Show report if available

@@ -253,7 +253,10 @@ async def _run_inference(job_id: str):
                 # Load the mask NIfTI and convert to uint8 C-contiguous (Z,Y,X)
                 mask_img = nib.load(str(result_mask))
                 mask_canonical = nib.as_closest_canonical(mask_img)
-                mask_data = np.asarray(mask_canonical.dataobj).astype(np.uint8)
+                mask_data = np.asarray(mask_canonical.dataobj)
+                print(f"[AI] raw mask dtype={mask_data.dtype} shape={mask_data.shape} "
+                      f"non-zero={np.count_nonzero(mask_data)} unique={np.unique(mask_data).tolist()[:10]}")
+                mask_data = mask_data.astype(np.uint8)
                 # mask_data is (X,Y,Z) after canonical; transpose to (Z,Y,X)
                 mask_zyx = mask_data.transpose(2, 1, 0)
                 mask_bytes = np.ascontiguousarray(mask_zyx).tobytes()
