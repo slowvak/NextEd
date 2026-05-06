@@ -91,7 +91,10 @@
       "Bash(echo \"PID: $!\")",
       "Bash(/Users/bje/repos/Sigma/server/.venv/bin/python *)",
       "Bash(lsof -iTCP:8050 -sTCP:LISTEN)",
-      "Bash(chmod +x *)"
+      "Bash(chmod +x *)",
+      "Read(//Users/**)",
+      "Read(//Users/bje01/repos/SigmaServer/**)",
+      "Bash(lsof -iTCP:8060 -sTCP:LISTEN)"
     ]
   }
 }
