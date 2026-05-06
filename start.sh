@@ -11,7 +11,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SIGMA_SERVER_DIR="/Users/bje/repos/SigmaServer"
+SIGMA_SERVER_DIR="../SigmaServer"
 
 AI_PORT=8050
 API_PORT=8060
