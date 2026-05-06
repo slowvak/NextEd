@@ -97,6 +97,7 @@ async def run_model(request: Request):
     model_id = body.get("model_id")
     start_slice = body.get("start_slice")
     end_slice = body.get("end_slice")
+    fast = body.get("fast")  # True/False/None; None means SigmaServer uses its platform default
 
     if not volume_id or not model_id:
         raise HTTPException(status_code=400, detail="volume_id and model_id required")
@@ -140,6 +141,7 @@ async def run_model(request: Request):
         "error": None,
         "start_slice": start_slice,
         "end_slice": end_slice,
+        "fast": fast,
     }
 
     # Run inference in background
@@ -153,7 +155,7 @@ async def _run_inference(job_id: str):
 
     job = _jobs[job_id]
     job["status"] = "running"
-    job["progress"] = 10
+    job["progress"] = 2
 
     volume_id = job["volume_id"]
     model_cfg = job["model_config"]
@@ -170,20 +172,28 @@ async def _run_inference(job_id: str):
 
         data, metadata = _volume_cache[volume_id]
         affine = metadata.get("affine", np.eye(4))
-        dims = metadata["dimensions"]
+        dims = metadata["dimensions"]  # [X, Y, Z]
+
+        # Apply Z-slice subset if specified (data is Z,Y,X)
+        z_total = data.shape[0]
+        z_start = int(job["start_slice"]) if job.get("start_slice") is not None else 0
+        z_end   = int(job["end_slice"])   if job.get("end_slice")   is not None else z_total
+        z_start = max(0, min(z_start, z_total))
+        z_end   = max(z_start + 1, min(z_end, z_total))
+        data_sub = data[z_start:z_end] if (z_start > 0 or z_end < z_total) else data
 
         # Write volume to temp NIfTI file
         # data is (Z,Y,X) float32 C-contiguous; transpose to (X,Y,Z) for NIfTI
-        vol_xyz = data.transpose(2, 1, 0).astype(np.float32)
+        vol_xyz = data_sub.transpose(2, 1, 0).astype(np.float32)
         vol_img = nib.Nifti1Image(vol_xyz, affine)
 
-        job["progress"] = 20
+        job["progress"] = 5
 
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "input.nii.gz"
             nib.save(vol_img, input_path)
 
-            job["progress"] = 30
+            job["progress"] = 8
 
             # Build multipart request
             files = {"image": ("input.nii.gz", open(input_path, "rb"), "application/gzip")}
@@ -192,6 +202,8 @@ async def _run_inference(job_id: str):
                 form_data["start_slice"] = str(job["start_slice"])
             if job.get("end_slice") is not None:
                 form_data["end_slice"] = str(job["end_slice"])
+            if job.get("fast") is not None:
+                form_data["fast"] = "true" if job["fast"] else "false"
 
             # If model accepts labels and we have seg data cached, send it
             if model_cfg.get("accepts_labels") and volume_id in _seg_upload_cache:
@@ -205,21 +217,41 @@ async def _run_inference(job_id: str):
                 nib.save(seg_img, seg_path)
                 files["labels"] = ("labels.nii.gz", open(seg_path, "rb"), "application/gzip")
 
-            job["progress"] = 40
-
             endpoint = model_cfg.get("endpoint", "/predict")
             url = f"{server_url}{endpoint}"
+            job["progress"] = 10
 
-            async with httpx.AsyncClient(timeout=600.0) as client:
-                job["progress"] = 50
-                resp = await client.post(url, files=files, data=form_data)
+            # Poll SigmaServer's /progress endpoint while inference runs so the
+            # browser progress bar reflects the real tqdm percentage (10%→95%).
+            async def _poll_sigmaserver_progress():
+                while True:
+                    await asyncio.sleep(0.5)
+                    try:
+                        async with httpx.AsyncClient(timeout=2.0) as pc:
+                            r = await pc.get(f"{server_url}/progress")
+                            if r.status_code == 200:
+                                pct = r.json().get("pct", 0)
+                                job["progress"] = 10 + int(pct * 0.85)
+                    except Exception:
+                        pass
+
+            poll_task = asyncio.create_task(_poll_sigmaserver_progress())
+            try:
+                async with httpx.AsyncClient(timeout=600.0) as client:
+                    resp = await client.post(url, files=files, data=form_data)
+            finally:
+                poll_task.cancel()
+                try:
+                    await poll_task
+                except asyncio.CancelledError:
+                    pass
 
             if resp.status_code != 200:
                 job["status"] = "failed"
                 job["error"] = f"AI server returned {resp.status_code}: {resp.text[:500]}"
                 return
 
-            job["progress"] = 70
+            job["progress"] = 92
 
             # Parse response — expect multipart with segmentation + optional report
             # For now, handle two response formats:
@@ -247,7 +279,7 @@ async def _run_inference(job_id: str):
                 mask_path.write_bytes(resp.content)
                 result_mask = mask_path
 
-            job["progress"] = 80
+            job["progress"] = 96
 
             if result_mask and result_mask.exists():
                 # Load the mask NIfTI and convert to uint8 C-contiguous (Z,Y,X)
@@ -259,6 +291,13 @@ async def _run_inference(job_id: str):
                 mask_data = mask_data.astype(np.uint8)
                 # mask_data is (X,Y,Z) after canonical; transpose to (Z,Y,X)
                 mask_zyx = mask_data.transpose(2, 1, 0)
+
+                # If a Z-slice subset was sent, pad the mask back to the full volume
+                if z_start > 0 or z_end < z_total:
+                    full = np.zeros((z_total, mask_zyx.shape[1], mask_zyx.shape[2]), dtype=np.uint8)
+                    full[z_start:z_end] = mask_zyx
+                    mask_zyx = full
+
                 mask_bytes = np.ascontiguousarray(mask_zyx).tobytes()
 
                 # Determine labels from model config or report
@@ -268,7 +307,7 @@ async def _run_inference(job_id: str):
 
                 job["result"] = {
                     "mask": mask_bytes,
-                    "dims": list(mask_zyx.shape),  # [Z, Y, X]
+                    "dims": list(mask_zyx.shape),  # [Z, Y, X] — always full volume
                     "labels": labels,
                     "report": result_report,
                 }
@@ -375,13 +414,39 @@ async def job_status_sse(job_id: str):
 
 @router.get("/jobs/{job_id}/result")
 async def get_job_result(job_id: str):
-    """Return the inference result — mask as binary uint8, labels + report as JSON.
+    """Return the inference result mask as raw uint8 bytes.
 
     Response headers:
     - X-Volume-Dimensions: Z,Y,X dimensions of the mask
-    - X-AI-Labels: JSON-encoded label array
-    - X-AI-Report: JSON-encoded report object
+
+    Labels and report are fetched separately via GET /jobs/{job_id}/meta
+    to avoid exceeding HTTP header size limits for large label sets.
     """
+    if job_id not in _jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = _jobs[job_id]
+    if job["status"] != "completed":
+        raise HTTPException(status_code=400, detail=f"Job not completed (status: {job['status']})")
+
+    result = job["result"]
+    print(f"[AI] get_job_result: status={job['status']} result_type={type(result)} result_keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+    if not result:
+        raise HTTPException(status_code=500, detail="No result data")
+
+    mask = result["mask"]
+    dims = result["dims"]
+    print(f"[AI] get_job_result: mask_type={type(mask)} mask_len={len(mask) if mask else 0} dims={dims}")
+    return Response(
+        content=mask,
+        media_type="application/octet-stream",
+        headers={"X-Volume-Dimensions": ",".join(str(d) for d in dims)},
+    )
+
+
+@router.get("/jobs/{job_id}/meta")
+async def get_job_meta(job_id: str):
+    """Return labels, dims, and report for a completed job as JSON."""
     if job_id not in _jobs:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -393,17 +458,11 @@ async def get_job_result(job_id: str):
     if not result:
         raise HTTPException(status_code=500, detail="No result data")
 
-    headers = {
-        "X-Volume-Dimensions": ",".join(str(d) for d in result["dims"]),
-        "X-AI-Labels": json.dumps(result["labels"]),
-        "X-AI-Report": json.dumps(result.get("report", {})),
+    return {
+        "dims": result["dims"],
+        "labels": result["labels"],
+        "report": result.get("report", {}),
     }
-
-    return Response(
-        content=result["mask"],
-        media_type="application/octet-stream",
-        headers=headers,
-    )
 
 
 @router.post("/upload-model")

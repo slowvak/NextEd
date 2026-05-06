@@ -1549,8 +1549,8 @@ async function _showAIModelPicker(state, metadata, onMaskApplied) {
       sliceOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:1100;display:flex;align-items:center;justify-content:center;';
       sliceOverlay.innerHTML = `
         <div style="background:#1e1e1e;padding:24px;border-radius:8px;width:320px;border:1px solid #3a3a3a;box-shadow:0 10px 30px rgba(0,0,0,0.5);color:#e0e0e0;">
-          <h3 style="margin-top:0;font-size:16px;margin-bottom:16px;">Slice Range</h3>
-          <div style="display:flex;gap:16px;margin-bottom:20px;">
+          <h3 style="margin-top:0;font-size:16px;margin-bottom:16px;">Run Options</h3>
+          <div style="display:flex;gap:16px;margin-bottom:16px;">
             <label style="flex:1;font-size:13px;">
               Start slice
               <input id="sr-start" type="number" min="0" max="${totalSlices - 1}" value="0"
@@ -1562,6 +1562,15 @@ async function _showAIModelPicker(state, metadata, onMaskApplied) {
                      style="display:block;width:100%;margin-top:4px;padding:6px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;box-sizing:border-box;">
             </label>
           </div>
+          <label style="display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:12px;cursor:pointer;">
+            <div style="position:relative;width:36px;height:20px;flex-shrink:0;">
+              <input id="sr-fast" type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute;">
+              <span id="sr-fast-track" style="position:absolute;inset:0;border-radius:20px;background:#4a9eff;transition:background .2s;"></span>
+              <span id="sr-fast-thumb" style="position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;left:19px;"></span>
+            </div>
+            <span>Fast mode <span id="sr-fast-label" style="color:#888;font-size:11px;">(3 mm)</span></span>
+          </label>
+          <p id="sr-estimate" style="margin:0 0 20px;font-size:12px;color:#888;"></p>
           <div style="display:flex;gap:8px;justify-content:flex-end;">
             <button id="sr-cancel" style="padding:6px 16px;background:none;border:1px solid #a0a0a0;color:#a0a0a0;border-radius:4px;cursor:pointer;">Cancel</button>
             <button id="sr-run" style="padding:6px 16px;background:#4a9eff;border:none;color:#fff;border-radius:4px;cursor:pointer;font-weight:600;">Run</button>
@@ -1571,10 +1580,43 @@ async function _showAIModelPicker(state, metadata, onMaskApplied) {
       document.body.appendChild(sliceOverlay);
 
       const sliceRange = await new Promise((resolve) => {
+        const checkbox = sliceOverlay.querySelector('#sr-fast');
+        const track = sliceOverlay.querySelector('#sr-fast-track');
+        const thumb = sliceOverlay.querySelector('#sr-fast-thumb');
+        const fastLabel = sliceOverlay.querySelector('#sr-fast-label');
+        const estimateEl = sliceOverlay.querySelector('#sr-estimate');
+        const startInput = sliceOverlay.querySelector('#sr-start');
+        const endInput   = sliceOverlay.querySelector('#sr-end');
+
+        const REF_VOXELS = 512 * 512 * 93;
+        function updateEstimate() {
+          const isFast = checkbox.checked;
+          const refSec = isFast ? 20 : 480;
+          const s = Math.max(0, parseInt(startInput.value, 10) || 0);
+          const e = Math.min(totalSlices, parseInt(endInput.value, 10) || totalSlices);
+          const selVoxels = state.dims[0] * state.dims[1] * Math.max(1, e - s);
+          const sec = Math.round(refSec * selVoxels / REF_VOXELS);
+          let timeStr;
+          if (sec < 90)        timeStr = `~${sec} s`;
+          else if (sec < 3600) timeStr = `~${Math.round(sec / 60)} min`;
+          else                 timeStr = `~${(sec / 3600).toFixed(1)} hr`;
+          fastLabel.textContent = isFast ? '(3 mm)' : '(1.5 mm)';
+          estimateEl.textContent = `Estimated time: ${timeStr}`;
+        }
+
+        checkbox.addEventListener('change', () => {
+          track.style.background = checkbox.checked ? '#4a9eff' : '#555';
+          thumb.style.left = checkbox.checked ? '19px' : '3px';
+          updateEstimate();
+        });
+        startInput.addEventListener('input', updateEstimate);
+        endInput.addEventListener('input', updateEstimate);
+        updateEstimate();
         sliceOverlay.querySelector('#sr-run').addEventListener('click', () => {
-          const startSlice = parseInt(sliceOverlay.querySelector('#sr-start').value, 10);
-          const endSlice = parseInt(sliceOverlay.querySelector('#sr-end').value, 10);
-          resolve({ startSlice, endSlice });
+          const startSlice = parseInt(startInput.value, 10);
+          const endSlice = parseInt(endInput.value, 10);
+          const fast = checkbox.checked;
+          resolve({ startSlice, endSlice, fast });
         });
         sliceOverlay.querySelector('#sr-cancel').addEventListener('click', () => {
           resolve(null);
@@ -1585,7 +1627,7 @@ async function _showAIModelPicker(state, metadata, onMaskApplied) {
 
       if (!sliceRange) return;
 
-      const { startSlice, endSlice } = sliceRange;
+      const { startSlice, endSlice, fast } = sliceRange;
 
       // Disable all options
       modal.querySelectorAll('.ai-model-option').forEach(o => {
@@ -1616,7 +1658,7 @@ async function _showAIModelPicker(state, metadata, onMaskApplied) {
         const runResp = await fetch('/api/v1/ai/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ volume_id: metadata.id, model_id: modelId, start_slice: startSlice, end_slice: endSlice }),
+          body: JSON.stringify({ volume_id: metadata.id, model_id: modelId, start_slice: startSlice, end_slice: endSlice, fast }),
         });
         const { job_id } = await runResp.json();
 
@@ -1644,20 +1686,28 @@ async function _showAIModelPicker(state, metadata, onMaskApplied) {
           };
         });
 
-        // Fetch result
+        // Fetch result mask and metadata in parallel
         statusText.textContent = 'Loading result...';
-        const resultResp = await fetch(`/api/v1/ai/jobs/${job_id}/result`);
+        const [resultResp, metaResp] = await Promise.all([
+          fetch(`/api/v1/ai/jobs/${job_id}/result`),
+          fetch(`/api/v1/ai/jobs/${job_id}/meta`),
+        ]);
+        if (!resultResp.ok) throw new Error(`Result fetch failed: ${resultResp.status}`);
+        if (!metaResp.ok) throw new Error(`Meta fetch failed: ${metaResp.status}`);
+
         const maskBuffer = await resultResp.arrayBuffer();
         const maskData = new Uint8Array(maskBuffer);
+        const meta = await metaResp.json();
+        const aiLabels = meta.labels ?? [];
+        const aiReport = meta.report ?? null;
 
-        const labelsJson = resultResp.headers.get('X-AI-Labels');
-        const aiLabels = labelsJson ? JSON.parse(labelsJson) : [];
-        const reportJson = resultResp.headers.get('X-AI-Report');
-        const aiReport = reportJson ? JSON.parse(reportJson) : null;
+        const maskNonZero = maskData.reduce((n, v) => n + (v !== 0 ? 1 : 0), 0);
+        console.log(`[NextEd] mask received: byteLength=${maskBuffer.byteLength} non-zero=${maskNonZero}`);
 
         const strategy = modal.querySelector('input[name="ai-strategy"]:checked').value;
         const [dx, dy, dz] = state.dims;
         const volSize = dx * dy * dz;
+        console.log(`[NextEd] state.dims=${JSON.stringify([dx,dy,dz])} volSize=${volSize} maskData.length=${maskData.length} serverDims=${JSON.stringify(meta.dims)}`);
 
         if (strategy === 'replace') {
           // Replace segmentation volume

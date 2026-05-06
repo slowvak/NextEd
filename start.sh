@@ -33,6 +33,11 @@ kill_port() {
       port_in_use "$port" || break
       sleep 0.5
     done
+    # If still alive (e.g. blocked in a C extension), force-kill
+    if port_in_use "$port"; then
+      lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | xargs kill -9 2>/dev/null || true
+      sleep 1
+    fi
   fi
 }
 
