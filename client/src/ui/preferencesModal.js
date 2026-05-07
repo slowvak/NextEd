@@ -172,92 +172,54 @@ export async function openPreferencesModal() {
   fileInput.multiple = true;
   fileInput.style.display = 'none';
 
-  const selectBtn = document.createElement('button');
-  selectBtn.textContent = 'Select Model File…';
-  selectBtn.className = 'btn';
-  selectBtn.type = 'button';
-  selectBtn.onclick = () => fileInput.click();
-
-  const selectedLabel = document.createElement('span');
-  selectedLabel.style.cssText = 'font-size:13px;color:#a0a0a0;';
-  selectedLabel.textContent = 'No file selected';
-
-  uploadRow.appendChild(fileInput);
-  uploadRow.appendChild(selectBtn);
-  uploadRow.appendChild(selectedLabel);
-  uploadWrap.appendChild(uploadRow);
-
-  // Info note for .pth files
-  const archNote = document.createElement('div');
-  archNote.style.cssText = 'display:none;font-size:12px;color:#a0a0a0;margin-bottom:8px;';
-  archNote.textContent = '.pth/.pt: architecture is auto-detected for MONAI UNet state dicts. Full nn.Module files load without configuration.';
-  uploadWrap.appendChild(archNote);
-
-  // Upload button + status
-  const uploadActionRow = document.createElement('div');
-  uploadActionRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
-
   const uploadBtn = document.createElement('button');
-  uploadBtn.textContent = 'Upload';
-  uploadBtn.className = 'btn btn-primary';
+  uploadBtn.textContent = 'Upload Custom Model…';
+  uploadBtn.className = 'btn';
   uploadBtn.type = 'button';
-  uploadBtn.disabled = true;
+  uploadBtn.onclick = () => fileInput.click();
 
   const uploadStatus = document.createElement('span');
   uploadStatus.style.cssText = 'font-size:13px;color:#a0a0a0;';
 
-  uploadActionRow.appendChild(uploadBtn);
-  uploadActionRow.appendChild(uploadStatus);
-  uploadWrap.appendChild(uploadActionRow);
+  uploadRow.appendChild(fileInput);
+  uploadRow.appendChild(uploadBtn);
+  uploadRow.appendChild(uploadStatus);
+  uploadWrap.appendChild(uploadRow);
 
-  let selectedModelFile = null;
-  let selectedConfigFile = null;
-
-  fileInput.onchange = (e) => {
+  fileInput.onchange = async (e) => {
     const files = Array.from(e.target.files);
-    selectedModelFile = null;
-    selectedConfigFile = null;
+    let modelFile = null;
+    let configFile = null;
 
     for (const f of files) {
       if (f.name.endsWith('.json')) {
-        selectedConfigFile = f;
+        configFile = f;
       } else if (f.name.endsWith('.onnx') || f.name.endsWith('.safetensors') || f.name.endsWith('.pth') || f.name.endsWith('.pt')) {
-        selectedModelFile = f;
+        modelFile = f;
       }
     }
 
-    if (!selectedModelFile) {
-      selectedLabel.textContent = 'No valid model file found';
-      uploadBtn.disabled = true;
-      archNote.style.display = 'none';
-      return;
-    }
-
-    selectedLabel.textContent = selectedModelFile.name;
-    uploadBtn.disabled = false;
-    uploadStatus.textContent = '';
-
-    const isPth = selectedModelFile.name.endsWith('.pth') || selectedModelFile.name.endsWith('.pt');
-    archNote.style.display = isPth ? 'block' : 'none';
-  };
-
-  uploadBtn.onclick = async () => {
-    if (!selectedModelFile) return;
-
-    if (selectedModelFile.name.endsWith('.safetensors') && !selectedConfigFile) {
-      uploadStatus.textContent = 'SafeTensors requires a config.json — select both files.';
+    if (!modelFile) {
+      uploadStatus.textContent = 'No valid model file found.';
       uploadStatus.style.color = '#ff6b6b';
+      fileInput.value = '';
       return;
     }
 
-    uploadStatus.textContent = `Uploading ${selectedModelFile.name}…`;
+    if (modelFile.name.endsWith('.safetensors') && !configFile) {
+      uploadStatus.textContent = 'SafeTensors requires a config.json — select both files together.';
+      uploadStatus.style.color = '#ff6b6b';
+      fileInput.value = '';
+      return;
+    }
+
+    uploadStatus.textContent = `Uploading ${modelFile.name}…`;
     uploadStatus.style.color = '#4a9eff';
     uploadBtn.disabled = true;
-    selectBtn.disabled = true;
 
     const formData = new FormData();
-    formData.append('file', selectedModelFile);
-    if (selectedConfigFile) formData.append('config', selectedConfigFile);
+    formData.append('file', modelFile);
+    if (configFile) formData.append('config', configFile);
 
     try {
       const res = await fetch('/api/v1/ai/upload-model', { method: 'POST', body: formData });
@@ -267,20 +229,15 @@ export async function openPreferencesModal() {
         try { msg = JSON.parse(txt).detail || msg; } catch (_) { msg = txt || msg; }
         throw new Error(msg);
       }
-      uploadStatus.textContent = 'Uploaded successfully.';
+      uploadStatus.textContent = `${modelFile.name} uploaded.`;
       uploadStatus.style.color = '#4caf50';
-      selectedModelFile = null;
-      selectedConfigFile = null;
-      selectedLabel.textContent = 'No file selected';
-      archNote.style.display = 'none';
-      fileInput.value = '';
     } catch (err) {
       console.error(err);
       uploadStatus.textContent = `Error: ${err.message}`;
       uploadStatus.style.color = '#ff6b6b';
     } finally {
-      uploadBtn.disabled = !selectedModelFile;
-      selectBtn.disabled = false;
+      uploadBtn.disabled = false;
+      fileInput.value = '';
     }
   };
 
