@@ -162,19 +162,9 @@ export async function openPreferencesModal() {
   const uploadWrap = document.createElement('div');
   uploadWrap.style.cssText = 'margin-top:1rem;padding-top:1rem;border-top:1px solid #444;';
 
-  const uploadHint = document.createElement('div');
-  uploadHint.style.cssText = 'font-size:12px;color:#a0a0a0;margin-bottom:8px;line-height:1.6;';
-  uploadHint.innerHTML =
-    '<b>.onnx</b> — upload alone. &nbsp;' +
-    '<b>.safetensors</b> — select alongside config.json. &nbsp;' +
-    '<b>.pth/.pt full module</b> — upload alone. &nbsp;' +
-    '<b>.pth/.pt state dict</b> — also select a JSON: <code>{"format":"monai_unet","spatial_dims":3,"in_channels":1,"out_channels":2,"channels":[16,32,64,128,256],"strides":[2,2,2,2]}</code>';
-  uploadWrap.appendChild(uploadHint);
-
+  // File selection row
   const uploadRow = document.createElement('div');
-  uploadRow.style.display = 'flex';
-  uploadRow.style.alignItems = 'center';
-  uploadRow.style.gap = '10px';
+  uploadRow.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px;';
 
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
@@ -182,83 +172,182 @@ export async function openPreferencesModal() {
   fileInput.multiple = true;
   fileInput.style.display = 'none';
 
+  const selectBtn = document.createElement('button');
+  selectBtn.textContent = 'Select Model File…';
+  selectBtn.className = 'btn';
+  selectBtn.type = 'button';
+  selectBtn.onclick = () => fileInput.click();
+
+  const selectedLabel = document.createElement('span');
+  selectedLabel.style.cssText = 'font-size:13px;color:#a0a0a0;';
+  selectedLabel.textContent = 'No file selected';
+
+  uploadRow.appendChild(fileInput);
+  uploadRow.appendChild(selectBtn);
+  uploadRow.appendChild(selectedLabel);
+  uploadWrap.appendChild(uploadRow);
+
+  // Architecture panel — shown only for .pth/.pt files
+  const archPanel = document.createElement('div');
+  archPanel.style.cssText = 'display:none;background:#2a2a2a;border:1px solid #555;border-radius:6px;padding:12px;margin-bottom:8px;';
+
+  const archTitle = document.createElement('div');
+  archTitle.style.cssText = 'font-size:13px;color:#e0e0e0;margin-bottom:10px;';
+  archTitle.innerHTML = '<b>Architecture</b> — required if this is a state dict (not a full saved module)';
+  archPanel.appendChild(archTitle);
+
+  const archToggleRow = document.createElement('div');
+  archToggleRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;';
+  const archCheckbox = document.createElement('input');
+  archCheckbox.type = 'checkbox';
+  archCheckbox.id = 'arch-is-state-dict';
+  const archCheckLabel = document.createElement('label');
+  archCheckLabel.htmlFor = 'arch-is-state-dict';
+  archCheckLabel.textContent = 'This .pth is a state dict — specify MONAI UNet architecture';
+  archCheckLabel.style.cssText = 'font-size:13px;color:#ccc;cursor:pointer;';
+  archToggleRow.appendChild(archCheckbox);
+  archToggleRow.appendChild(archCheckLabel);
+  archPanel.appendChild(archToggleRow);
+
+  const archFields = document.createElement('div');
+  archFields.style.display = 'none';
+
+  const archDefs = [
+    { key: 'spatial_dims', label: 'Spatial dims',  val: '3',              type: 'number' },
+    { key: 'in_channels',  label: 'In channels',   val: '1',              type: 'number' },
+    { key: 'out_channels', label: 'Out channels',  val: '2',              type: 'number' },
+    { key: 'channels',     label: 'Channels',      val: '16,32,64,128,256', type: 'text' },
+    { key: 'strides',      label: 'Strides',       val: '2,2,2,2',        type: 'text'   },
+    { key: 'num_res_units',label: 'Res units',     val: '2',              type: 'number' },
+  ];
+  const archInputs = {};
+  archDefs.forEach(({ key, label, val, type }) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+    const lbl = document.createElement('label');
+    lbl.textContent = label + ':';
+    lbl.style.cssText = 'width:110px;font-size:12px;color:#a0a0a0;flex-shrink:0;';
+    const inp = document.createElement('input');
+    inp.type = type;
+    inp.value = val;
+    inp.style.cssText = 'flex:1;padding:4px 8px;background:#333;color:white;border:1px solid #555;border-radius:4px;font-size:12px;';
+    archInputs[key] = inp;
+    row.appendChild(lbl);
+    row.appendChild(inp);
+    archFields.appendChild(row);
+  });
+  archPanel.appendChild(archFields);
+  archCheckbox.addEventListener('change', () => {
+    archFields.style.display = archCheckbox.checked ? 'block' : 'none';
+  });
+  uploadWrap.appendChild(archPanel);
+
+  // Upload button + status
+  const uploadActionRow = document.createElement('div');
+  uploadActionRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
+
   const uploadBtn = document.createElement('button');
-  uploadBtn.textContent = 'Upload Custom Model';
-  uploadBtn.className = 'btn';
+  uploadBtn.textContent = 'Upload';
+  uploadBtn.className = 'btn btn-primary';
   uploadBtn.type = 'button';
+  uploadBtn.disabled = true;
 
   const uploadStatus = document.createElement('span');
-  uploadStatus.style.fontSize = '13px';
-  uploadStatus.style.color = '#a0a0a0';
+  uploadStatus.style.cssText = 'font-size:13px;color:#a0a0a0;';
 
-  uploadBtn.onclick = () => fileInput.click();
+  uploadActionRow.appendChild(uploadBtn);
+  uploadActionRow.appendChild(uploadStatus);
+  uploadWrap.appendChild(uploadActionRow);
 
-  fileInput.onchange = async (e) => {
+  let selectedModelFile = null;
+  let selectedConfigFile = null;
+
+  fileInput.onchange = (e) => {
     const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    let modelFile = null;
-    let configFile = null;
+    selectedModelFile = null;
+    selectedConfigFile = null;
 
     for (const f of files) {
       if (f.name.endsWith('.json')) {
-        configFile = f;
+        selectedConfigFile = f;
       } else if (f.name.endsWith('.onnx') || f.name.endsWith('.safetensors') || f.name.endsWith('.pth') || f.name.endsWith('.pt')) {
-        modelFile = f;
+        selectedModelFile = f;
       }
     }
 
-    if (!modelFile) {
-      uploadStatus.textContent = 'Error: No valid model file selected.';
-      uploadStatus.style.color = '#ff6b6b';
+    if (!selectedModelFile) {
+      selectedLabel.textContent = 'No valid model file found';
+      uploadBtn.disabled = true;
+      archPanel.style.display = 'none';
       return;
     }
 
-    if (modelFile.name.endsWith('.safetensors') && !configFile) {
-      uploadStatus.textContent = 'Error: SafeTensors models require a config.json alongside the model file.';
-      uploadStatus.style.color = '#ff6b6b';
-      fileInput.value = '';
-      return;
-    }
+    selectedLabel.textContent = selectedModelFile.name;
+    uploadBtn.disabled = false;
+    uploadStatus.textContent = '';
 
-    performUpload(modelFile, configFile);
+    const isPth = selectedModelFile.name.endsWith('.pth') || selectedModelFile.name.endsWith('.pt');
+    archPanel.style.display = isPth ? 'block' : 'none';
+    if (!isPth) { archCheckbox.checked = false; archFields.style.display = 'none'; }
   };
 
-  async function performUpload(file, configFile) {
-    uploadStatus.textContent = `Uploading ${file.name}...`;
+  uploadBtn.onclick = async () => {
+    if (!selectedModelFile) return;
+
+    if (selectedModelFile.name.endsWith('.safetensors') && !selectedConfigFile) {
+      uploadStatus.textContent = 'SafeTensors requires a config.json — select both files.';
+      uploadStatus.style.color = '#ff6b6b';
+      return;
+    }
+
+    uploadStatus.textContent = `Uploading ${selectedModelFile.name}…`;
     uploadStatus.style.color = '#4a9eff';
     uploadBtn.disabled = true;
+    selectBtn.disabled = true;
 
     const formData = new FormData();
-    formData.append('file', file);
-    if (configFile) formData.append('config', configFile);
+    formData.append('file', selectedModelFile);
+    if (selectedConfigFile) formData.append('config', selectedConfigFile);
+
+    if (archCheckbox.checked) {
+      const parseList = s => s.split(',').map(n => parseInt(n.trim(), 10));
+      const archSpec = {
+        format: 'monai_unet',
+        spatial_dims: parseInt(archInputs.spatial_dims.value, 10),
+        in_channels:  parseInt(archInputs.in_channels.value, 10),
+        out_channels: parseInt(archInputs.out_channels.value, 10),
+        channels:     parseList(archInputs.channels.value),
+        strides:      parseList(archInputs.strides.value),
+        num_res_units: parseInt(archInputs.num_res_units.value, 10),
+      };
+      formData.append('arch', JSON.stringify(archSpec));
+    }
 
     try {
       const res = await fetch('/api/v1/ai/upload-model', { method: 'POST', body: formData });
-
       if (!res.ok) {
-        const textData = await res.text();
-        let errMsg = 'Upload failed';
-        try { errMsg = JSON.parse(textData).detail || errMsg; } catch (e) { errMsg = textData || errMsg; }
-        throw new Error(errMsg);
+        const txt = await res.text();
+        let msg = 'Upload failed';
+        try { msg = JSON.parse(txt).detail || msg; } catch (_) { msg = txt || msg; }
+        throw new Error(msg);
       }
-
-      uploadStatus.textContent = 'Success! Reload UI.';
+      uploadStatus.textContent = 'Uploaded successfully.';
       uploadStatus.style.color = '#4caf50';
+      selectedModelFile = null;
+      selectedConfigFile = null;
+      selectedLabel.textContent = 'No file selected';
+      archPanel.style.display = 'none';
+      fileInput.value = '';
     } catch (err) {
       console.error(err);
       uploadStatus.textContent = `Error: ${err.message}`;
       uploadStatus.style.color = '#ff6b6b';
     } finally {
-      uploadBtn.disabled = false;
-      fileInput.value = '';
+      uploadBtn.disabled = !selectedModelFile;
+      selectBtn.disabled = false;
     }
-  }
+  };
 
-  uploadRow.appendChild(fileInput);
-  uploadRow.appendChild(uploadBtn);
-  uploadRow.appendChild(uploadStatus);
-  uploadWrap.appendChild(uploadRow);
   aiSec.appendChild(uploadWrap);
 
   form.appendChild(aiSec);
