@@ -481,23 +481,22 @@ async def upload_model(
     if not server_url:
         raise HTTPException(status_code=400, detail="No AI server configured")
         
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            # We need to forward the file as multipart/form-data
-            files = [('file', (file.filename, await file.read(), file.content_type))]
-            if config:
-                files.append(('config', (config.filename, await config.read(), config.content_type)))
-            
-            data = {}
-            if name: data['name'] = name
-            if description: data['description'] = description
-            if arch: data['arch'] = arch
-            
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        files = [('file', (file.filename, await file.read(), file.content_type))]
+        if config:
+            files.append(('config', (config.filename, await config.read(), config.content_type)))
+
+        data = {}
+        if name: data['name'] = name
+        if description: data['description'] = description
+        if arch: data['arch'] = arch
+
+        try:
             resp = await client.post(f"{server_url}/models/upload", files=files, data=data)
-            
-            if resp.status_code != 200:
-                raise HTTPException(status_code=resp.status_code, detail=resp.text)
-                
-            return resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload model: {e}")
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Could not reach AI server: {e}")
+
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail", resp.text))
+
+        return resp.json()
