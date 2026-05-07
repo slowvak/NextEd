@@ -1,4 +1,5 @@
 import './styles.css';
+import { showSplashIfNeeded } from './ui/splashScreen.js';
 import { createAppShell } from './ui/appShell.js';
 import { renderVolumeList, addVolumeToList, removeVolumeFromList } from './ui/volumeList.js';
 import { renderVolumeDetail, renderEmptyState } from './ui/volumeDetail.js';
@@ -19,6 +20,7 @@ let currentVolume = null;
 let currentLayout = null;
 
 async function init() {
+  await showSplashIfNeeded();
   await loadAppConfig();
 
   // Check for task mode (external workflow integration)

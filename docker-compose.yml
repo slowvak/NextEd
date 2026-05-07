@@ -1,0 +1,53 @@
+services:
+
+  # ── AI inference server (SigmaServer) ────────────────────────────────────────
+  sigmaserver:
+    build:
+      context: ../SigmaServer
+      dockerfile: Dockerfile
+    ports:
+      - "8050:8050"
+    volumes:
+      # Mount model weights from the host. Each model lives at:
+      #   ../SigmaServer/models/<model-id>/<weights-file>
+      - ../SigmaServer/models:/app/models:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8050/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Image / volume server (Sigma backend) ────────────────────────────────────
+  sigma-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "8060:8060"
+    volumes:
+      # Medical image data directory — set DATA_DIR on the host or edit this path
+      - ${DATA_DIR:-./data}:/data
+    environment:
+      # Tells the entrypoint to point config.json at the AI container
+      AI_SERVER_URL: "http://sigmaserver:8050"
+    depends_on:
+      sigmaserver:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Web client (Vite build served by nginx) ──────────────────────────────────
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    ports:
+      - "5275:80"
+    depends_on:
+      - sigma-server
+    restart: unless-stopped
+
+networks:
+  default:
+    name: sigma-net

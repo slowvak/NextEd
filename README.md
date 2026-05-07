@@ -15,6 +15,34 @@
 
 ---
 
+## Quick Start (Docker)
+
+The fastest way to run ΣIGMA with AI inference is with Docker Compose. Both the image server and the AI inference server (SigmaServer) start together and are pre-wired to talk to each other.
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose v2)
+
+```bash
+# Clone both repos side-by-side (they must share the same parent directory)
+git clone https://github.com/slowvak/SIGMA.git
+git clone https://github.com/slowvak/SigmaServer.git
+
+# From the Sigma directory, point DATA_DIR at your image folder and start
+cd SIGMA
+DATA_DIR=/path/to/your/images docker compose up --build
+```
+
+Then open **http://localhost:5275** in your browser.
+
+| Service | Container port | What it does |
+|---------|---------------|-------------|
+| client | 5275 | Nginx — serves the UI and proxies `/api/` to the image server |
+| sigma-server | 8060 | FastAPI — catalogs and serves medical volumes |
+| sigmaserver | 8050 | FastAPI — AI inference (model weights loaded from `../SigmaServer/models/`) |
+
+> **No GPU?** The AI inference service will run on CPU. Inference will be slow for large models but everything else works normally.
+
+---
+
 ## Getting Started
 
 ### Prerequisites

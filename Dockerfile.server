@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Install deps (cached layer — only invalidated when lockfile changes)
+COPY server/pyproject.toml server/uv.lock server/
+RUN cd server && uv sync --no-dev --frozen
+
+# Copy application code
+COPY server/ server/
+
+# config.json can be bind-mounted at runtime; provide a minimal default
+COPY config.json .
+
+RUN mkdir -p models
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+EXPOSE 8060
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["server/.venv/bin/python", "server/main.py"]
