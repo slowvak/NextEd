@@ -234,6 +234,22 @@ export class ViewerState {
     this.notify();
   }
 
+  setAllLabelsVisible(visible) {
+    let changed = false;
+    for (const [val, label] of this.labels) {
+      if (val === 0) continue;
+      const target = visible !== false;
+      if ((label.isVisible !== false) !== target) {
+        label.isVisible = target;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.colorLUT = buildColorLUT(this.labels);
+      this.notify();
+    }
+  }
+
   setActiveLabel(value) {
     this.activeLabel = value;
     const label = this.labels.get(value);

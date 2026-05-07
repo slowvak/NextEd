@@ -500,3 +500,25 @@ async def upload_model(
             raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail", resp.text))
 
         return resp.json()
+
+
+@router.delete("/models/{model_id}")
+async def delete_model(model_id: str):
+    """Proxy model deletion to SigmaServer. Only user-uploaded models can be removed."""
+    import httpx
+
+    cfg = _load_config()
+    server_url = cfg.get("server", "").rstrip("/")
+    if not server_url:
+        raise HTTPException(status_code=400, detail="No AI server configured")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.delete(f"{server_url}/models/{model_id}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not reach AI server: {e}")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail", resp.text))
+
+    return resp.json()

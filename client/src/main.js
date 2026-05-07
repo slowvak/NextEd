@@ -980,7 +980,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   filterBtn.textContent = 'Filter';
   filterBtn.addEventListener('click', () => {
     if (!state.volume) { alert('No image loaded.'); return; }
-    _showFilterModal(state);
+    _showFilterModal(state, metadata);
   });
 
   const clearSliceBtn = document.createElement('button');
@@ -1016,10 +1016,33 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
   morphRow.appendChild(filterBtn);
   toolPanel.appendChild(morphRow);
 
-  // AI button — same row style as morphRow
+  // AI + Remove Unlabeled row
   const aiRow = document.createElement('div');
   aiRow.className = 'tool-section compact';
   aiRow.style.flexDirection = 'row';
+
+  const removeUnlabeledBtn = document.createElement('button');
+  removeUnlabeledBtn.className = 'compact-btn action-btn';
+  removeUnlabeledBtn.textContent = 'Remove Unlabeled';
+  removeUnlabeledBtn.title = 'Set all image voxels outside visible label regions to the volume minimum';
+  removeUnlabeledBtn.style.flex = '2';
+  removeUnlabeledBtn.addEventListener('click', () => {
+    if (!state.volume || !state.segVolume || !state.labels) return;
+    const minVal = state.dataMin ?? 0;
+    let changed = 0;
+    for (let i = 0; i < state.volume.length; i++) {
+      const labelVal = state.segVolume[i];
+      const isVisible = labelVal !== 0 && state.labels.get(labelVal)?.isVisible !== false;
+      if (!isVisible) {
+        state.volume[i] = minVal;
+        if (labelVal !== 0) state.segVolume[i] = 0;
+        changed++;
+      }
+    }
+    if (changed === 0) return;
+    state.notify();
+    _promptSaveNifti(state, metadata);
+  });
 
   const aiBtn = document.createElement('button');
   aiBtn.className = 'compact-btn action-btn';
@@ -1030,6 +1053,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     _maskLoaded = true;
     _showSaveBtn();
   }));
+  aiRow.appendChild(removeUnlabeledBtn);
   aiRow.appendChild(aiBtn);
   toolPanel.appendChild(aiRow);
 
@@ -1316,11 +1340,17 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     labelsSec.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <label class="detail-label" style="margin:0;">Labels</label>
-        <button id="add-label-btn" title="Add Label" style="background:none;border:none;color:#4a9eff;cursor:pointer;font-size:16px;">➕</button>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <button id="labels-all-on-btn" title="Show all labels" style="background:none;border:1px solid #555;border-radius:3px;color:#000;cursor:pointer;font-size:10px;padding:1px 5px;line-height:1.4;">All On</button>
+          <button id="labels-all-off-btn" title="Hide all labels" style="background:none;border:1px solid #555;border-radius:3px;color:#000;cursor:pointer;font-size:10px;padding:1px 5px;line-height:1.4;">All Off</button>
+          <button id="add-label-btn" title="Add Label" style="background:none;border:none;color:#4a9eff;cursor:pointer;font-size:16px;">➕</button>
+        </div>
       </div>
     `;
-    
+
     labelsSec.querySelector('#add-label-btn').addEventListener('click', handleAddLabel);
+    labelsSec.querySelector('#labels-all-on-btn').addEventListener('click', () => state.setAllLabelsVisible(true));
+    labelsSec.querySelector('#labels-all-off-btn').addEventListener('click', () => state.setAllLabelsVisible(false));
 
     // Always show label 0 (background/erase) at top
     {
@@ -1820,10 +1850,6 @@ async function _showAIModelPicker(state, metadata, onMaskApplied) {
         onMaskApplied?.();
         close();
 
-        // Show report if available
-        if (aiReport && Object.keys(aiReport).length > 0) {
-          setTimeout(() => _showAIReportModal(aiReport), 100);
-        }
 
       } catch (err) {
         statusText.textContent = `Error: ${err.message}`;
@@ -1831,6 +1857,127 @@ async function _showAIModelPicker(state, metadata, onMaskApplied) {
         progressBar.style.background = '#ff6b6b';
       }
     });
+  });
+}
+
+async function _promptSaveNifti(state, metadata) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#1e2130;border:1px solid #444;border-radius:10px;padding:1.4rem 1.6rem;width:440px;max-width:95vw;color:#e0e0e0;font-family:inherit;';
+
+    const title = document.createElement('div');
+    title.textContent = 'Save modified image?';
+    title.style.cssText = 'font-size:1rem;font-weight:600;margin-bottom:1rem;';
+    card.appendChild(title);
+
+    // Folder row
+    const folderRow = document.createElement('div');
+    folderRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
+
+    const folderInput = document.createElement('input');
+    folderInput.type = 'text';
+    folderInput.placeholder = 'Folder…';
+    folderInput.style.cssText = 'flex:1;background:#111;border:1px solid #555;border-radius:4px;padding:5px 8px;color:#fff;font-size:13px;';
+
+    const browseBtn = document.createElement('button');
+    browseBtn.textContent = 'Browse…';
+    browseBtn.className = 'btn';
+    browseBtn.type = 'button';
+    browseBtn.onclick = async () => {
+      browseBtn.disabled = true;
+      try {
+        const res = await fetch('/api/v1/config/browse-folder', { method: 'POST' });
+        if (res.ok) {
+          const { path } = await res.json();
+          if (path) folderInput.value = path;
+        }
+      } finally {
+        browseBtn.disabled = false;
+      }
+    };
+
+    folderRow.appendChild(folderInput);
+    folderRow.appendChild(browseBtn);
+    card.appendChild(folderRow);
+
+    // Filename row
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.style.cssText = 'width:100%;box-sizing:border-box;background:#111;border:1px solid #555;border-radius:4px;padding:5px 8px;color:#fff;font-size:13px;margin-bottom:1rem;';
+    const stem = (metadata?.name || 'volume').replace(/[/\\?%*:|"<>]/g, '_');
+    nameInput.value = stem + '_masked.nii.gz';
+    card.appendChild(nameInput);
+
+    const status = document.createElement('div');
+    status.style.cssText = 'font-size:12px;min-height:1.2em;margin-bottom:0.6rem;';
+    card.appendChild(status);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'btn';
+    cancelBtn.onclick = () => { document.body.removeChild(overlay); resolve(null); };
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save';
+    saveBtn.className = 'btn btn-primary';
+    saveBtn.onclick = async () => {
+      const folder = folderInput.value.trim();
+      const name = nameInput.value.trim();
+      if (!folder) { folderInput.focus(); return; }
+      if (!name) { nameInput.focus(); return; }
+
+      const savePath = folder.replace(/\/$/, '') + '/' + name;
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      status.style.color = '#4a9eff';
+      status.textContent = 'Writing file…';
+
+      try {
+        // Diagnostic: log what we're about to send
+        {
+          let vMin = Infinity, vMax = -Infinity;
+          for (let i = 0; i < state.volume.length; i++) {
+            const v = state.volume[i];
+            if (v < vMin) vMin = v;
+            if (v > vMax) vMax = v;
+          }
+          console.log(`[save-nifti] sending ${state.volume.length} float32 (${state.volume.byteLength} bytes), range [${vMin.toFixed(1)}, ${vMax.toFixed(1)}], byteOffset=${state.volume.byteOffset}`);
+          console.log(`[save-nifti] first 8 values:`, Array.from(state.volume.subarray(0, 8)));
+        }
+        const res = await fetch(
+          `/api/v1/volumes/${metadata.id}/save-nifti?path=${encodeURIComponent(savePath)}`,
+          { method: 'POST', body: state.volume, headers: { 'Content-Type': 'application/octet-stream' } }
+        );
+        if (!res.ok) {
+          const detail = await res.json().then(j => j.detail).catch(() => res.statusText);
+          throw new Error(detail);
+        }
+        const { saved } = await res.json();
+        status.style.color = '#4caf50';
+        status.textContent = `Saved: ${saved}`;
+        saveBtn.textContent = 'Done';
+        setTimeout(() => { document.body.removeChild(overlay); resolve(saved); }, 1200);
+      } catch (err) {
+        status.style.color = '#ff6b6b';
+        status.textContent = `Error: ${err.message}`;
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+      }
+    };
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    card.appendChild(actions);
+
+    overlay.appendChild(card);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(null); } });
+    document.body.appendChild(overlay);
   });
 }
 
@@ -1977,7 +2124,7 @@ function _showLabelEditPopup(state, val) {
   setTimeout(() => nameInput.focus(), 0);
 }
 
-function _showFilterModal(state) {
+function _showFilterModal(state, metadata) {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:center;justify-content:center;';
 
@@ -2084,6 +2231,9 @@ function _showFilterModal(state) {
       );
 
       state.notify();
+      overlay.remove();
+      _promptSaveNifti(state, metadata);
+      return;
     } catch (err) {
       alert(`Filter error: ${err.message}`);
     }

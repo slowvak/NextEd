@@ -160,6 +160,18 @@ def discover_dicom_series(root: Path) -> list[dict]:
     return result
 
 
+def _detect_gantry_tilt(slices: list) -> float:
+    """Return gantry tilt in degrees from DICOM GantryDetectorTilt tag, else 0.0."""
+    for s in slices:
+        tag = getattr(s, "GantryDetectorTilt", None)
+        if tag is not None:
+            try:
+                return float(tag)
+            except (TypeError, ValueError):
+                pass
+    return 0.0
+
+
 def load_dicom_series(file_paths: list[str]) -> tuple[np.ndarray, dict]:
     """Load a DICOM series from an explicit list of file paths.
 
@@ -240,6 +252,19 @@ def load_dicom_series(file_paths: list[str]) -> tuple[np.ndarray, dict]:
     # Wrap in nibabel NIfTI image for RAS+ normalization
     nii_img = nib.Nifti1Image(volume_3d, affine)
     canonical = nib.as_closest_canonical(nii_img)
+
+    # Correct gantry tilt by resampling to an orthogonal grid.
+    # The tilted affine encodes the shear correctly, but the client treats the
+    # volume as a rectangular array and ignores off-diagonal affine terms.
+    # resample_to_output builds a diagonal (shear-free) affine covering the same
+    # world-space bounding box, then interpolates the data onto that grid.
+    tilt_deg = _detect_gantry_tilt(slices)
+    if abs(tilt_deg) > 0.5:
+        from nibabel.processing import resample_to_output
+        zooms = tuple(float(z) for z in canonical.header.get_zooms()[:3])
+        fill_value = float(np.min(canonical.get_fdata(dtype=np.float32)))
+        canonical = resample_to_output(canonical, voxel_sizes=zooms, order=1, cval=fill_value)
+        print(f"[dicom_loader] Gantry tilt {tilt_deg:.1f}° — resliced to orthogonal grid {canonical.shape}, fill={fill_value:.0f}")
 
     raw = canonical.get_fdata(dtype=np.float32)
     data = np.ascontiguousarray(raw.transpose(2, 1, 0))

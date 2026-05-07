@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
 from server.catalog.models import VolumeMetadata
@@ -143,6 +143,113 @@ async def get_volume_as_nifti(volume_id: str) -> Response:
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/{volume_id}/save-nifti")
+async def save_volume_as_nifti(volume_id: str, path: str, request: Request) -> dict:
+    """Save a (possibly client-modified) volume as NIfTI to an absolute filesystem path.
+
+    The request body must be raw float32 bytes in C-contiguous (Z, Y, X) order,
+    matching the layout returned by GET /{volume_id}/data.  The affine is taken
+    from the server-side cache so orientation is preserved.
+    """
+    import os
+    import tempfile
+    import traceback
+
+    import nibabel as nib
+    import numpy as np
+
+    try:
+        return await _save_volume_as_nifti_impl(volume_id, path, request, os, tempfile, nib, np)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[save-nifti] UNHANDLED EXCEPTION:\n{tb}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {exc}")
+
+
+async def _save_volume_as_nifti_impl(volume_id, path, request, os, tempfile, nib, np):
+    if volume_id not in _metadata_registry:
+        raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
+
+    print(f"[save-nifti] step 1: ensuring loaded for {volume_id}")
+    _ensure_loaded(volume_id)
+    _, loader_meta = _volume_cache[volume_id]
+    reg_meta = _metadata_registry[volume_id]
+    print(f"[save-nifti] step 2: reg_meta.dimensions={reg_meta.dimensions}, reg_meta.voxel_spacing={reg_meta.voxel_spacing}")
+    print(f"[save-nifti] step 3: loader_meta keys={list(loader_meta.keys())}, has_affine={loader_meta.get('affine') is not None}")
+
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Request body is empty")
+
+    # Use the registry dimensions (always up-to-date) as the source of truth.
+    dims = reg_meta.dimensions or loader_meta.get("dimensions")
+    print(f"[save-nifti] step 4: dims={dims}, body={len(body)} bytes")
+    if not dims:
+        raise HTTPException(status_code=500, detail="Volume dimensions not available")
+    expected = dims[0] * dims[1] * dims[2] * 4
+    if len(body) != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Body size {len(body)} != expected {expected} bytes for dims {dims}",
+        )
+
+    try:
+        flat = np.frombuffer(body, dtype=np.float32).copy()
+        print(f"[save-nifti] step 5: {len(flat)} voxels, range [{float(flat.min()):.2f}, {float(flat.max()):.2f}]")
+        # Client sends (Z, Y, X) order; NIfTI/nibabel expects (X, Y, Z).
+        vol_zyx = flat.reshape(dims[2], dims[1], dims[0])
+        vol_xyz = np.ascontiguousarray(vol_zyx.transpose(2, 1, 0))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not reshape volume data: {exc}")
+
+    print(f"[save-nifti] step 6: vol_xyz.shape={vol_xyz.shape}")
+
+    affine = loader_meta.get("affine")
+    if affine is None:
+        affine = np.diag([*reg_meta.voxel_spacing, 1.0])
+    print(f"[save-nifti] step 7: affine type={type(affine).__name__}, shape={getattr(affine, 'shape', 'n/a')}")
+
+    try:
+        img = nib.Nifti1Image(vol_xyz, affine)
+        print(f"[save-nifti] step 8: NIfTI image created, shape={img.shape}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not create NIfTI image: {exc}")
+
+    save_path = Path(path)
+    if save_path.suffix not in (".gz", ".nii"):
+        save_path = Path(str(save_path) + ".nii.gz")
+    print(f"[save-nifti] step 9: save_path={save_path}")
+
+    try:
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot create directory {save_path.parent}: {exc}")
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".nii.gz", delete=False, dir=save_path.parent
+        ) as tmp:
+            tmp_path = tmp.name
+        print(f"[save-nifti] step 10: writing to tmp {tmp_path}")
+        nib.save(img, tmp_path)
+        print(f"[save-nifti] step 11: nib.save done, replacing → {save_path}")
+        os.replace(tmp_path, str(save_path))
+    except Exception as exc:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        print(f"[save-nifti] Error saving {save_path}: {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to write file: {exc}")
+
+    print(f"[save-nifti] DONE: saved {save_path} ({vol_xyz.shape})")
+    return {"saved": str(save_path)}
 
 
 @router.get("/{volume_id}/data")

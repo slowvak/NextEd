@@ -94,7 +94,8 @@
       "Bash(chmod +x *)",
       "Read(//Users/**)",
       "Read(//Users/bje01/repos/SigmaServer/**)",
-      "Bash(lsof -iTCP:8060 -sTCP:LISTEN)"
+      "Bash(lsof -iTCP:8060 -sTCP:LISTEN)",
+      "Bash(awk '{print $1, $NF}')"
     ]
   }
 }

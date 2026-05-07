@@ -178,48 +178,97 @@ export async function openPreferencesModal() {
   uploadBtn.type = 'button';
   uploadBtn.onclick = () => fileInput.click();
 
+  const removeModelBtn = document.createElement('button');
+  removeModelBtn.textContent = 'Remove Model…';
+  removeModelBtn.className = 'btn';
+  removeModelBtn.type = 'button';
+  removeModelBtn.onclick = () => _showRemoveModelDialog(uploadStatus);
+
   const uploadStatus = document.createElement('span');
   uploadStatus.style.cssText = 'font-size:13px;color:#a0a0a0;';
 
   uploadRow.appendChild(fileInput);
   uploadRow.appendChild(uploadBtn);
+  uploadRow.appendChild(removeModelBtn);
   uploadRow.appendChild(uploadStatus);
   uploadWrap.appendChild(uploadRow);
 
-  fileInput.onchange = async (e) => {
+  // Name row — shown after file selection
+  const nameRow = document.createElement('div');
+  nameRow.style.cssText = 'display:none;align-items:center;gap:8px;margin-bottom:8px;';
+
+  const nameLabel = document.createElement('label');
+  nameLabel.textContent = 'Friendly Name:';
+  nameLabel.style.cssText = 'font-size:13px;white-space:nowrap;color:#ccc;';
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.style.cssText = 'flex:1;background:#2a2a2a;border:1px solid #555;border-radius:4px;padding:4px 8px;color:#fff;font-size:13px;';
+
+  const doUploadBtn = document.createElement('button');
+  doUploadBtn.textContent = 'Upload';
+  doUploadBtn.className = 'btn';
+  doUploadBtn.type = 'button';
+
+  nameRow.appendChild(nameLabel);
+  nameRow.appendChild(nameInput);
+  nameRow.appendChild(doUploadBtn);
+  uploadWrap.appendChild(nameRow);
+
+  let pendingModelFile = null;
+  let pendingConfigFile = null;
+
+  fileInput.onchange = (e) => {
     const files = Array.from(e.target.files);
-    let modelFile = null;
-    let configFile = null;
+    pendingModelFile = null;
+    pendingConfigFile = null;
 
     for (const f of files) {
       if (f.name.endsWith('.json')) {
-        configFile = f;
+        pendingConfigFile = f;
       } else if (f.name.endsWith('.onnx') || f.name.endsWith('.safetensors') || f.name.endsWith('.pth') || f.name.endsWith('.pt')) {
-        modelFile = f;
+        pendingModelFile = f;
       }
     }
 
-    if (!modelFile) {
+    uploadStatus.textContent = '';
+    nameRow.style.display = 'none';
+
+    if (!pendingModelFile) {
       uploadStatus.textContent = 'No valid model file found.';
       uploadStatus.style.color = '#ff6b6b';
       fileInput.value = '';
       return;
     }
 
-    if (modelFile.name.endsWith('.safetensors') && !configFile) {
+    if (pendingModelFile.name.endsWith('.safetensors') && !pendingConfigFile) {
       uploadStatus.textContent = 'SafeTensors requires a config.json — select both files together.';
       uploadStatus.style.color = '#ff6b6b';
       fileInput.value = '';
       return;
     }
 
-    uploadStatus.textContent = `Uploading ${modelFile.name}…`;
+    // Pre-fill name from filename stem and show name row
+    const stem = pendingModelFile.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+    nameInput.value = stem;
+    nameRow.style.display = 'flex';
+    nameInput.focus();
+    nameInput.select();
+  };
+
+  doUploadBtn.onclick = async () => {
+    if (!pendingModelFile) return;
+
+    uploadStatus.textContent = `Uploading…`;
     uploadStatus.style.color = '#4a9eff';
+    doUploadBtn.disabled = true;
     uploadBtn.disabled = true;
 
     const formData = new FormData();
-    formData.append('file', modelFile);
-    if (configFile) formData.append('config', configFile);
+    formData.append('file', pendingModelFile);
+    if (pendingConfigFile) formData.append('config', pendingConfigFile);
+    const friendlyName = nameInput.value.trim();
+    if (friendlyName) formData.append('name', friendlyName);
 
     try {
       const res = await fetch('/api/v1/ai/upload-model', { method: 'POST', body: formData });
@@ -229,17 +278,123 @@ export async function openPreferencesModal() {
         try { msg = JSON.parse(txt).detail || msg; } catch (_) { msg = txt || msg; }
         throw new Error(msg);
       }
-      uploadStatus.textContent = `${modelFile.name} uploaded.`;
+      const displayName = friendlyName || pendingModelFile.name;
+      uploadStatus.textContent = `"${displayName}" uploaded successfully.`;
       uploadStatus.style.color = '#4caf50';
+      nameRow.style.display = 'none';
+      pendingModelFile = null;
+      pendingConfigFile = null;
     } catch (err) {
       console.error(err);
       uploadStatus.textContent = `Error: ${err.message}`;
       uploadStatus.style.color = '#ff6b6b';
     } finally {
+      doUploadBtn.disabled = false;
       uploadBtn.disabled = false;
       fileInput.value = '';
     }
   };
+
+  async function _showRemoveModelDialog(statusEl) {
+    // Fetch current models
+    let models;
+    try {
+      const res = await fetch('/api/v1/ai/models');
+      models = await res.json();
+    } catch (_) {
+      models = null;
+    }
+
+    const removable = (models || []).filter(m => !m.builtin);
+    if (removable.length === 0) {
+      statusEl.textContent = 'No removable models (built-in models cannot be removed).';
+      statusEl.style.color = '#a0a0a0';
+      return;
+    }
+
+    // Build inline selection UI appended to uploadWrap
+    const existing = uploadWrap.querySelector('.remove-model-panel');
+    if (existing) { existing.remove(); return; }
+
+    const panel = document.createElement('div');
+    panel.className = 'remove-model-panel';
+    panel.style.cssText = 'margin-top:8px;padding:10px;background:#2a2a2a;border:1px solid #555;border-radius:6px;';
+
+    const panelLabel = document.createElement('div');
+    panelLabel.textContent = 'Select model to remove:';
+    panelLabel.style.cssText = 'font-size:13px;color:#ccc;margin-bottom:6px;';
+    panel.appendChild(panelLabel);
+
+    const select = document.createElement('select');
+    select.style.cssText = 'width:100%;background:#333;color:#fff;border:1px solid #555;border-radius:4px;padding:4px 6px;font-size:13px;margin-bottom:8px;';
+    for (const m of removable) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.name || m.id;
+      select.appendChild(opt);
+    }
+    panel.appendChild(select);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;align-items:center;';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = 'Remove';
+    confirmBtn.className = 'btn';
+    confirmBtn.style.cssText = 'background:#c0392b;border-color:#e74c3c;color:#fff;';
+    confirmBtn.type = 'button';
+
+    const cancelBtn2 = document.createElement('button');
+    cancelBtn2.textContent = 'Cancel';
+    cancelBtn2.className = 'btn';
+    cancelBtn2.type = 'button';
+    cancelBtn2.onclick = () => panel.remove();
+
+    const panelStatus = document.createElement('span');
+    panelStatus.style.cssText = 'font-size:12px;color:#a0a0a0;';
+
+    btnRow.appendChild(confirmBtn);
+    btnRow.appendChild(cancelBtn2);
+    btnRow.appendChild(panelStatus);
+    panel.appendChild(btnRow);
+    uploadWrap.appendChild(panel);
+
+    confirmBtn.onclick = async () => {
+      const modelId = select.value;
+      const modelName = select.options[select.selectedIndex].textContent;
+      confirmBtn.disabled = true;
+      panelStatus.textContent = 'Removing…';
+      panelStatus.style.color = '#4a9eff';
+
+      try {
+        const res = await fetch(`/api/v1/ai/models/${encodeURIComponent(modelId)}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const detail = await res.json().then(j => j.detail).catch(() => res.statusText);
+          throw new Error(detail);
+        }
+        panel.remove();
+        statusEl.textContent = `"${modelName}" removed.`;
+        statusEl.style.color = '#4caf50';
+        // Refresh the models display
+        modelsDisplay.textContent = 'Loading…';
+        modelsDisplay.style.color = '';
+        fetch('/api/v1/ai/models').then(r => r.json()).then(updated => {
+          if (!updated || updated.length === 0) {
+            modelsDisplay.style.color = '#a0a0a0';
+            modelsDisplay.textContent = 'No models available — is SigmaServer running?';
+          } else {
+            modelsDisplay.innerHTML = updated.map(m =>
+              `<div style="margin-bottom:4px;"><span style="color:#4a9eff;font-weight:600;">${m.name}</span> <span style="color:#a0a0a0;font-size:12px;">${m.description || ''}</span></div>`
+            ).join('');
+          }
+        }).catch(() => {});
+      } catch (err) {
+        panelStatus.textContent = `Error: ${err.message}`;
+        panelStatus.style.color = '#ff6b6b';
+        confirmBtn.disabled = false;
+      }
+    };
+  }
 
   aiSec.appendChild(uploadWrap);
 
