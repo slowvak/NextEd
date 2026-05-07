@@ -124,19 +124,7 @@ export async function openPreferencesModal() {
   });
   form.appendChild(wlSec);
 
-  // 3. Default Labels Section
-  const labelSec = createSection('Default Labels');
-  const labelInputs = {};
-  ['1', '2', '3', '4', '5'].forEach(lbl => {
-    const inp = document.createElement('input');
-    inp.type = 'text';
-    inp.value = configData.default_labels?.[lbl] || `Label ${lbl}`;
-    labelSec.appendChild(createInputRow(`Label ${lbl}:`, inp));
-    labelInputs[lbl] = inp;
-  });
-  form.appendChild(labelSec);
-
-  // 4. AI Configuration Section
+  // 3. AI Configuration Section
   const aiSec = createSection('AI Configuration');
   const aiServerInput = document.createElement('input');
   aiServerInput.type = 'text';
@@ -171,13 +159,22 @@ export async function openPreferencesModal() {
   });
 
   // Upload Model UI
+  const uploadWrap = document.createElement('div');
+  uploadWrap.style.cssText = 'margin-top:1rem;padding-top:1rem;border-top:1px solid #444;';
+
+  const uploadHint = document.createElement('div');
+  uploadHint.style.cssText = 'font-size:12px;color:#a0a0a0;margin-bottom:8px;line-height:1.6;';
+  uploadHint.innerHTML =
+    '<b>.onnx</b> — upload alone. &nbsp;' +
+    '<b>.safetensors</b> — select alongside config.json. &nbsp;' +
+    '<b>.pth/.pt full module</b> — upload alone. &nbsp;' +
+    '<b>.pth/.pt state dict</b> — also select a JSON: <code>{"format":"monai_unet","spatial_dims":3,"in_channels":1,"out_channels":2,"channels":[16,32,64,128,256],"strides":[2,2,2,2]}</code>';
+  uploadWrap.appendChild(uploadHint);
+
   const uploadRow = document.createElement('div');
   uploadRow.style.display = 'flex';
   uploadRow.style.alignItems = 'center';
   uploadRow.style.gap = '10px';
-  uploadRow.style.marginTop = '1rem';
-  uploadRow.style.paddingTop = '1rem';
-  uploadRow.style.borderTop = '1px solid #444';
 
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
@@ -261,7 +258,8 @@ export async function openPreferencesModal() {
   uploadRow.appendChild(fileInput);
   uploadRow.appendChild(uploadBtn);
   uploadRow.appendChild(uploadStatus);
-  aiSec.appendChild(uploadRow);
+  uploadWrap.appendChild(uploadRow);
+  aiSec.appendChild(uploadWrap);
 
   form.appendChild(aiSec);
 
@@ -284,7 +282,7 @@ export async function openPreferencesModal() {
     const newConfig = {
       source_directory: sourceInput.value,
       window_level_presets: {},
-      default_labels: {},
+      default_labels: configData.default_labels || {},
       ai: {
         server: aiServerInput.value,
         models: configData.ai?.models || []
@@ -296,10 +294,6 @@ export async function openPreferencesModal() {
         center: parseFloat(wlInputs[preset].center.value),
         width: parseFloat(wlInputs[preset].width.value)
       };
-    }
-
-    for (const lbl in labelInputs) {
-      newConfig.default_labels[lbl] = labelInputs[lbl].value;
     }
 
     try {
