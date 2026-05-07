@@ -187,60 +187,11 @@ export async function openPreferencesModal() {
   uploadRow.appendChild(selectedLabel);
   uploadWrap.appendChild(uploadRow);
 
-  // Architecture panel — shown only for .pth/.pt files
-  const archPanel = document.createElement('div');
-  archPanel.style.cssText = 'display:none;background:#2a2a2a;border:1px solid #555;border-radius:6px;padding:12px;margin-bottom:8px;';
-
-  const archTitle = document.createElement('div');
-  archTitle.style.cssText = 'font-size:13px;color:#e0e0e0;margin-bottom:10px;';
-  archTitle.innerHTML = '<b>Architecture</b> — required if this is a state dict (not a full saved module)';
-  archPanel.appendChild(archTitle);
-
-  const archToggleRow = document.createElement('div');
-  archToggleRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;';
-  const archCheckbox = document.createElement('input');
-  archCheckbox.type = 'checkbox';
-  archCheckbox.id = 'arch-is-state-dict';
-  const archCheckLabel = document.createElement('label');
-  archCheckLabel.htmlFor = 'arch-is-state-dict';
-  archCheckLabel.textContent = 'This .pth is a state dict — specify MONAI UNet architecture';
-  archCheckLabel.style.cssText = 'font-size:13px;color:#ccc;cursor:pointer;';
-  archToggleRow.appendChild(archCheckbox);
-  archToggleRow.appendChild(archCheckLabel);
-  archPanel.appendChild(archToggleRow);
-
-  const archFields = document.createElement('div');
-  archFields.style.display = 'none';
-
-  const archDefs = [
-    { key: 'spatial_dims', label: 'Spatial dims',  val: '3',              type: 'number' },
-    { key: 'in_channels',  label: 'In channels',   val: '1',              type: 'number' },
-    { key: 'out_channels', label: 'Out channels',  val: '2',              type: 'number' },
-    { key: 'channels',     label: 'Channels',      val: '16,32,64,128,256', type: 'text' },
-    { key: 'strides',      label: 'Strides',       val: '2,2,2,2',        type: 'text'   },
-    { key: 'num_res_units',label: 'Res units',     val: '2',              type: 'number' },
-  ];
-  const archInputs = {};
-  archDefs.forEach(({ key, label, val, type }) => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';
-    const lbl = document.createElement('label');
-    lbl.textContent = label + ':';
-    lbl.style.cssText = 'width:110px;font-size:12px;color:#a0a0a0;flex-shrink:0;';
-    const inp = document.createElement('input');
-    inp.type = type;
-    inp.value = val;
-    inp.style.cssText = 'flex:1;padding:4px 8px;background:#333;color:white;border:1px solid #555;border-radius:4px;font-size:12px;';
-    archInputs[key] = inp;
-    row.appendChild(lbl);
-    row.appendChild(inp);
-    archFields.appendChild(row);
-  });
-  archPanel.appendChild(archFields);
-  archCheckbox.addEventListener('change', () => {
-    archFields.style.display = archCheckbox.checked ? 'block' : 'none';
-  });
-  uploadWrap.appendChild(archPanel);
+  // Info note for .pth files
+  const archNote = document.createElement('div');
+  archNote.style.cssText = 'display:none;font-size:12px;color:#a0a0a0;margin-bottom:8px;';
+  archNote.textContent = '.pth/.pt: architecture is auto-detected for MONAI UNet state dicts. Full nn.Module files load without configuration.';
+  uploadWrap.appendChild(archNote);
 
   // Upload button + status
   const uploadActionRow = document.createElement('div');
@@ -278,7 +229,7 @@ export async function openPreferencesModal() {
     if (!selectedModelFile) {
       selectedLabel.textContent = 'No valid model file found';
       uploadBtn.disabled = true;
-      archPanel.style.display = 'none';
+      archNote.style.display = 'none';
       return;
     }
 
@@ -287,8 +238,7 @@ export async function openPreferencesModal() {
     uploadStatus.textContent = '';
 
     const isPth = selectedModelFile.name.endsWith('.pth') || selectedModelFile.name.endsWith('.pt');
-    archPanel.style.display = isPth ? 'block' : 'none';
-    if (!isPth) { archCheckbox.checked = false; archFields.style.display = 'none'; }
+    archNote.style.display = isPth ? 'block' : 'none';
   };
 
   uploadBtn.onclick = async () => {
@@ -309,20 +259,6 @@ export async function openPreferencesModal() {
     formData.append('file', selectedModelFile);
     if (selectedConfigFile) formData.append('config', selectedConfigFile);
 
-    if (archCheckbox.checked) {
-      const parseList = s => s.split(',').map(n => parseInt(n.trim(), 10));
-      const archSpec = {
-        format: 'monai_unet',
-        spatial_dims: parseInt(archInputs.spatial_dims.value, 10),
-        in_channels:  parseInt(archInputs.in_channels.value, 10),
-        out_channels: parseInt(archInputs.out_channels.value, 10),
-        channels:     parseList(archInputs.channels.value),
-        strides:      parseList(archInputs.strides.value),
-        num_res_units: parseInt(archInputs.num_res_units.value, 10),
-      };
-      formData.append('arch', JSON.stringify(archSpec));
-    }
-
     try {
       const res = await fetch('/api/v1/ai/upload-model', { method: 'POST', body: formData });
       if (!res.ok) {
@@ -336,7 +272,7 @@ export async function openPreferencesModal() {
       selectedModelFile = null;
       selectedConfigFile = null;
       selectedLabel.textContent = 'No file selected';
-      archPanel.style.display = 'none';
+      archNote.style.display = 'none';
       fileInput.value = '';
     } catch (err) {
       console.error(err);
