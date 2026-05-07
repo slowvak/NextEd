@@ -186,7 +186,7 @@ export async function openPreferencesModal() {
   fileInput.style.display = 'none';
 
   const uploadBtn = document.createElement('button');
-  uploadBtn.textContent = 'Upload Custom Model (Select both Model & Config.json)';
+  uploadBtn.textContent = 'Upload Custom Model';
   uploadBtn.className = 'btn';
   uploadBtn.type = 'button';
 
@@ -217,8 +217,8 @@ export async function openPreferencesModal() {
       return;
     }
 
-    if ((modelFile.name.endsWith('.safetensors') || modelFile.name.endsWith('.pth') || modelFile.name.endsWith('.pt')) && !configFile) {
-      uploadStatus.textContent = 'Error: Please select config.json ALONG WITH the model file.';
+    if (modelFile.name.endsWith('.safetensors') && !configFile) {
+      uploadStatus.textContent = 'Error: SafeTensors models require a config.json alongside the model file.';
       uploadStatus.style.color = '#ff6b6b';
       fileInput.value = '';
       return;
