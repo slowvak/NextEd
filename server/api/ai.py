@@ -470,7 +470,8 @@ async def upload_model(
     file: UploadFile = File(...),
     config: UploadFile | None = File(None),
     name: str = Form(None),
-    description: str = Form(None)
+    description: str = Form(None),
+    arch: str = Form(""),
 ):
     """Proxy model upload to the AI Inference server."""
     import httpx
@@ -490,6 +491,7 @@ async def upload_model(
             data = {}
             if name: data['name'] = name
             if description: data['description'] = description
+            if arch: data['arch'] = arch
             
             resp = await client.post(f"{server_url}/models/upload", files=files, data=data)
             
