@@ -130,6 +130,7 @@ async def complete_task(request: Request):
 
     result_payload = {
         "status": "completed",
+        "task_id": body.get("task_id"),
         "response": {
             "decision": decision,
             "text": text,

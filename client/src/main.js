@@ -249,7 +249,19 @@ async function initTaskMode(taskParams) {
         // Show success
         const bar = document.querySelector('.task-bar');
         if (bar) {
-          bar.innerHTML = '<div class="task-prompt" style="color:#6fcf97;">Task completed successfully. You may close this window.</div>';
+          // Notify opener if this was a popup
+          if (window.opener) {
+            window.opener.postMessage({ type: 'sigma_task_completed', result }, '*');
+          }
+
+          if (taskParams.returnUrl) {
+            bar.innerHTML = `<div class="task-prompt" style="color:#6fcf97;">Task completed. Redirecting...</div>`;
+            setTimeout(() => {
+              window.location.href = taskParams.returnUrl;
+            }, 1500);
+          } else {
+            bar.innerHTML = '<div class="task-prompt" style="color:#6fcf97;">Task completed successfully. You may close this window.</div>';
+          }
         }
       } catch (err) {
         console.error('[NextEd] Task completion failed:', err);

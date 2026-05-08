@@ -95,7 +95,8 @@
       "Read(//Users/**)",
       "Read(//Users/bje01/repos/SigmaServer/**)",
       "Bash(lsof -iTCP:8060 -sTCP:LISTEN)",
-      "Bash(awk '{print $1, $NF}')"
+      "Bash(awk '{print $1, $NF}')",
+      "Bash(.venv/bin/python -c \"import server\")"
     ]
   }
 }
