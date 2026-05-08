@@ -26,8 +26,11 @@ def compute_auto_window(data: np.ndarray) -> tuple[float, float]:
         return 40.0, 400.0  # Standard soft-tissue window
 
     # Non-CT path: use percentile-based windowing of foreground voxels.
-    # Foreground = voxels above the background level.
-    if d_min < 0:
+    # Use d_min as the background threshold only for genuinely negative data
+    # (e.g. some MRI sequences).  For near-zero negatives (d_min > -1.0) —
+    # which happen with cubic B-spline ringing at registration borders —
+    # always use 0 as the threshold so background fill-zeros are excluded.
+    if d_min < -1.0:
         foreground = data[data > d_min]
     else:
         foreground = data[data > 0]

@@ -116,6 +116,9 @@ app.include_router(wado_router)
 from server.api.config import router as config_router
 app.include_router(config_router)
 
+from server.api.multivolume import router as multivolume_router
+app.include_router(multivolume_router)
+
 # Catalog of discovered volumes (populated at startup)
 _catalog: list[VolumeMetadata] = []
 # Catalog of segmentations grouped by volume ID

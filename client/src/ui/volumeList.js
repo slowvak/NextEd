@@ -1,58 +1,8 @@
-export function renderVolumeList(volumes, container, onSelect) {
-  container.innerHTML = '';
-  if (volumes.length === 0) {
-    const li = document.createElement('li');
-    li.className = 'volume-item';
-    li.textContent = 'No volumes found.';
-    container.appendChild(li);
-    return;
-  }
-  for (const vol of volumes) {
-    const li = document.createElement('li');
-    li.className = 'volume-item';
-    li.setAttribute('role', 'option');
-    li.setAttribute('aria-selected', 'false');
-    li.setAttribute('tabindex', '0');
-    li.dataset.volumeId = vol.id;
+/** @type {function(string): void} - set by main.js to open a volume in a linked window */
+let _openLinkedWindow = null;
+export function setOpenLinkedWindowCallback(fn) { _openLinkedWindow = fn; }
 
-    const headerRow = document.createElement('div');
-    headerRow.className = 'volume-item-header';
-
-    const name = document.createElement('span');
-    name.className = 'volume-name';
-    name.textContent = vol.filename || vol.name;
-
-    const badge = document.createElement('span');
-    badge.className = `volume-badge ${vol.format}`;
-    badge.textContent = vol.format.toUpperCase();
-
-    headerRow.appendChild(name);
-    headerRow.appendChild(badge);
-
-    const dims = document.createElement('span');
-    dims.className = 'volume-dims';
-    dims.textContent = `${vol.dimensions[0]} x ${vol.dimensions[1]} x ${vol.dimensions[2]}`;
-
-    li.appendChild(headerRow);
-    li.appendChild(dims);
-
-    li.addEventListener('click', () => onSelect(vol));
-    li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        onSelect(vol);
-      }
-    });
-
-    container.appendChild(li);
-  }
-}
-
-export function addVolumeToList(vol, container, onSelect) {
-  // Remove "No volumes found" placeholder if present
-  const placeholder = container.querySelector('.volume-item:not([data-volume-id])');
-  if (placeholder) placeholder.remove();
-
+function _buildVolumeItem(vol, onSelect) {
   const li = document.createElement('li');
   li.className = 'volume-item';
   li.setAttribute('role', 'option');
@@ -67,18 +17,33 @@ export function addVolumeToList(vol, container, onSelect) {
   name.className = 'volume-name';
   name.textContent = vol.filename || vol.name;
 
+  const right = document.createElement('div');
+  right.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+
   const badge = document.createElement('span');
   badge.className = `volume-badge ${vol.format}`;
   badge.textContent = vol.format.toUpperCase();
 
+  // Link button — opens this volume in a synced window
+  const linkBtn = document.createElement('button');
+  linkBtn.className = 'volume-link-btn';
+  linkBtn.title = 'Open in linked window';
+  linkBtn.textContent = '⛓';
+  linkBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // don't trigger onSelect
+    if (_openLinkedWindow) _openLinkedWindow(vol.id);
+  });
+
+  right.appendChild(badge);
+  right.appendChild(linkBtn);
+
   headerRow.appendChild(name);
-  headerRow.appendChild(badge);
+  headerRow.appendChild(right);
 
   const dims = document.createElement('span');
   dims.className = 'volume-dims';
-  if (vol.dimensions) {
-    dims.textContent = `${vol.dimensions[0]} x ${vol.dimensions[1]} x ${vol.dimensions[2]}`;
-  }
+  const [dx, dy, dz] = vol.dimensions;
+  dims.textContent = `${dx} × ${dy} × ${dz}`;
 
   li.appendChild(headerRow);
   li.appendChild(dims);
@@ -91,7 +56,28 @@ export function addVolumeToList(vol, container, onSelect) {
     }
   });
 
-  container.appendChild(li);
+  return li;
+}
+
+export function renderVolumeList(volumes, container, onSelect) {
+  container.innerHTML = '';
+  if (volumes.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'volume-item';
+    li.textContent = 'No volumes found.';
+    container.appendChild(li);
+    return;
+  }
+  for (const vol of volumes) {
+    container.appendChild(_buildVolumeItem(vol, onSelect));
+  }
+}
+
+export function addVolumeToList(vol, container, onSelect) {
+  // Remove "No volumes found" placeholder if present
+  const placeholder = container.querySelector('.volume-item:not([data-volume-id])');
+  if (placeholder) placeholder.remove();
+  container.appendChild(_buildVolumeItem(vol, onSelect));
 }
 
 export function removeVolumeFromList(volumeId, container) {
