@@ -96,7 +96,9 @@
       "Read(//Users/bje01/repos/SigmaServer/**)",
       "Bash(lsof -iTCP:8060 -sTCP:LISTEN)",
       "Bash(awk '{print $1, $NF}')",
-      "Bash(.venv/bin/python -c \"import server\")"
+      "Bash(.venv/bin/python -c \"import server\")",
+      "Bash(.venv/bin/python -c \"from server.api.multivolume import router; print\\('multivolume router OK'\\)\")",
+      "Bash(server/.venv/bin/python *)"
     ]
   }
 }
