@@ -91,6 +91,12 @@ export class ViewerPanel {
     this._currentDiff = null;
     this._lastWLX = 0;
     this._lastWLY = 0;
+    this._isDraggingPan = false;
+    this._lastPanX = 0;
+    this._lastPanY = 0;
+    this._panX = 0;
+    this._panY = 0;
+    this._zoomLevel = 1;
 
     this._buildDOM();
     this._setupResizeObserver();
@@ -224,10 +230,21 @@ export class ViewerPanel {
   _setupEventHandlers() {
     // Prevent context menu on canvas (Ctrl+click on macOS triggers it)
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Prevent browser auto-scroll mode on middle click
+    this.canvas.addEventListener('auxclick', (e) => e.preventDefault());
 
-    // Mouse down on canvas: crosshair drag or Ctrl+drag W/L
+    // Mouse down on canvas: pan (middle), W/L (Ctrl+left), crosshair, paint, grow
     this.canvas.addEventListener('mousedown', (e) => {
       if (!this.volume) return;
+
+      if (e.button === 1) {
+        e.preventDefault();
+        this._isDraggingPan = true;
+        this._lastPanX = e.clientX;
+        this._lastPanY = e.clientY;
+        this.canvas.style.cursor = 'grabbing';
+        return;
+      }
 
       // Check for oblique rotation handle hit
       if (this._obliqueHandles && !e.ctrlKey && !e.metaKey) {
@@ -325,6 +342,14 @@ export class ViewerPanel {
         this._handleObliqueRotation(e);
         return;
       }
+      if (this._isDraggingPan) {
+        this._panX += e.clientX - this._lastPanX;
+        this._panY += e.clientY - this._lastPanY;
+        this._lastPanX = e.clientX;
+        this._lastPanY = e.clientY;
+        this._applyTransform();
+        return;
+      }
       if (this._isDraggingCrosshair) {
         this._updateCrosshairFromMouse(e);
       } else if (this._isDraggingWL) {
@@ -344,6 +369,10 @@ export class ViewerPanel {
     this._onMouseUp = () => {
       this._isDraggingObliqueHandle = false;
       this._isDraggingCrosshair = false;
+      if (this._isDraggingPan) {
+        this._isDraggingPan = false;
+        this.canvas.style.cursor = '';
+      }
       if (this._isPainting) {
         this._isPainting = false;
         if (this._currentDiff) {
@@ -378,8 +407,8 @@ export class ViewerPanel {
       const cssY = e.clientY - rect.top;
       const { cursorUpdates } = canvasToVoxel(
         cssX, cssY, this.axis,
-        { width: this.canvas.width, clientWidth: this.canvas.clientWidth },
-        { height: this.canvas.height, clientHeight: this.canvas.clientHeight },
+        { width: this.canvas.width, clientWidth: rect.width },
+        { height: this.canvas.height, clientHeight: rect.height },
         this.dims
       );
       const [cx, cy, cz] = this.state.cursor;
@@ -404,10 +433,24 @@ export class ViewerPanel {
       this.state.setCursorValue(null);
     });
 
-    // Mouse wheel: scroll slices (D-01, D-02, D-03)
+    // Mouse wheel: Ctrl+wheel zooms, plain wheel scrolls slices
     this.canvas.addEventListener('wheel', (e) => {
       if (!this.volume) return;
       e.preventDefault();
+
+      if (e.ctrlKey || e.metaKey) {
+        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        const newZoom = Math.min(10, Math.max(0.25, this._zoomLevel * factor));
+        const dz = newZoom / this._zoomLevel;
+        const rect = this.canvasContainer.getBoundingClientRect();
+        const rx = e.clientX - rect.left - this.canvasContainer.clientWidth / 2;
+        const ry = e.clientY - rect.top - this.canvasContainer.clientHeight / 2;
+        this._panX = this._panX * dz + rx * (1 - dz);
+        this._panY = this._panY * dz + ry * (1 - dz);
+        this._zoomLevel = newZoom;
+        this._applyTransform();
+        return;
+      }
 
       const [cx, cy, cz] = this.state.cursor;
       // deltaY > 0 = scroll down = previous slice, deltaY < 0 = scroll up = next slice
@@ -446,8 +489,8 @@ export class ViewerPanel {
 
     const { cursorUpdates } = canvasToVoxel(
       cssX, cssY, this.axis,
-      { width: this.canvas.width, clientWidth: this.canvas.clientWidth },
-      { height: this.canvas.height, clientHeight: this.canvas.clientHeight },
+      { width: this.canvas.width, clientWidth: rect.width },
+      { height: this.canvas.height, clientHeight: rect.height },
       this.dims
     );
 
@@ -470,8 +513,8 @@ export class ViewerPanel {
 
     const { cursorUpdates } = canvasToVoxel(
       cssX, cssY, this.axis,
-      { width: this.canvas.width, clientWidth: this.canvas.clientWidth },
-      { height: this.canvas.height, clientHeight: this.canvas.clientHeight },
+      { width: this.canvas.width, clientWidth: rect.width },
+      { height: this.canvas.height, clientHeight: rect.height },
       this.dims
     );
 
@@ -481,7 +524,7 @@ export class ViewerPanel {
     const targetZ = cursorUpdates[2] !== undefined ? cursorUpdates[2] : cz;
 
     let targetDepth, uCenter, vCenter;
-    
+
     if (this.axis === 'axial') {
       targetDepth = targetZ; uCenter = targetX; vCenter = targetY;
     } else if (this.axis === 'coronal') {
@@ -582,8 +625,8 @@ export class ViewerPanel {
 
     const { cursorUpdates } = canvasToVoxel(
       cssX, cssY, this.axis,
-      { width: this.canvas.width, clientWidth: this.canvas.clientWidth },
-      { height: this.canvas.height, clientHeight: this.canvas.clientHeight },
+      { width: this.canvas.width, clientWidth: rect.width },
+      { height: this.canvas.height, clientHeight: rect.height },
       this.dims
     );
 
@@ -919,6 +962,10 @@ export class ViewerPanel {
     if (this.axis === 'axial') return this.state.cursor[2];
     if (this.axis === 'coronal') return this.state.cursor[1];
     return this.state.cursor[0]; // sagittal
+  }
+
+  _applyTransform() {
+    this.canvas.style.transform = `translate(${this._panX}px, ${this._panY}px) scale(${this._zoomLevel})`;
   }
 
   /**
