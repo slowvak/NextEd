@@ -1348,6 +1348,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
           <button id="labels-all-on-btn" title="Show all labels" style="background:none;border:1px solid #555;border-radius:3px;color:#000;cursor:pointer;font-size:10px;padding:1px 5px;line-height:1.4;">All On</button>
           <button id="labels-all-off-btn" title="Hide all labels" style="background:none;border:1px solid #555;border-radius:3px;color:#000;cursor:pointer;font-size:10px;padding:1px 5px;line-height:1.4;">All Off</button>
           <button id="add-label-btn" title="Add Label" style="background:none;border:none;color:#4a9eff;cursor:pointer;font-size:16px;">➕</button>
+          <button id="delete-labels-btn" title="Delete label mask" style="background:none;border:1px solid #a33;border-radius:3px;color:#e55;cursor:pointer;font-size:10px;padding:1px 5px;line-height:1.4;">Delete Labels</button>
         </div>
       </div>
     `;
@@ -1355,6 +1356,20 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     labelsSec.querySelector('#add-label-btn').addEventListener('click', handleAddLabel);
     labelsSec.querySelector('#labels-all-on-btn').addEventListener('click', () => state.setAllLabelsVisible(true));
     labelsSec.querySelector('#labels-all-off-btn').addEventListener('click', () => state.setAllLabelsVisible(false));
+    labelsSec.querySelector('#delete-labels-btn').addEventListener('click', () => {
+      if (!confirm('Delete the label mask and all labels?')) return;
+      state.segVolume = null;
+      state.segDims = null;
+      state.labels = new Map();
+      state.colorLUT = null;
+      state.activeLabel = 0;
+      state.undoStack = [];
+      state.segVersion++;
+      _maskLoaded = false;
+      _savedSegVersion = state.segVersion;
+      _showLoadBtn();
+      state.notify();
+    });
 
     // Always show label 0 (background/erase) at top
     {
