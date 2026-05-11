@@ -5,20 +5,21 @@
  * output voxel is computed from original (unfiltered) neighbours.
  */
 
-function gaussianWeights(ks, mode) {
-  const h = (ks - 1) >> 1;
-  const sigma = ks / 4;
-  const s2 = 2 * sigma * sigma;
+function gaussianWeights(ksXY, ksZ, mode) {
+  const hXY = (ksXY - 1) >> 1;
+  const hZ  = (ksZ  - 1) >> 1;
+  const s2XY = 2 * (ksXY / 4) ** 2;
+  const s2Z  = 2 * (ksZ  / 4) ** 2;
   const w = [];
   if (mode === '2d') {
-    for (let dy = -h; dy <= h; dy++)
-      for (let dx = -h; dx <= h; dx++)
-        w.push(Math.exp(-(dx * dx + dy * dy) / s2));
+    for (let dy = -hXY; dy <= hXY; dy++)
+      for (let dx = -hXY; dx <= hXY; dx++)
+        w.push(Math.exp(-(dx * dx + dy * dy) / s2XY));
   } else {
-    for (let dz = -h; dz <= h; dz++)
-      for (let dy = -h; dy <= h; dy++)
-        for (let dx = -h; dx <= h; dx++)
-          w.push(Math.exp(-(dx * dx + dy * dy + dz * dz) / s2));
+    for (let dz = -hZ; dz <= hZ; dz++)
+      for (let dy = -hXY; dy <= hXY; dy++)
+        for (let dx = -hXY; dx <= hXY; dx++)
+          w.push(Math.exp(-(dx * dx + dy * dy) / s2XY - (dz * dz) / s2Z));
   }
   return w;
 }
@@ -29,22 +30,26 @@ function gaussianWeights(ks, mode) {
  * @param {Float32Array} volume  - Raw voxel intensities (modified in place)
  * @param {number[]}     dims    - [dimX, dimY, dimZ]
  * @param {Object}       options
- *   mode:       '2d' | '3d'
- *   filterType: 'mean' | 'median' | 'sigma'
- *   kernelSize: 3 | 5 | 7
- *   applyTo:    'slice' | 'volume'
- *   sliceZ:     number  (used when applyTo === 'slice')
+ *   mode:         '2d' | '3d'
+ *   filterType:   'mean' | 'median' | 'sigma'
+ *   kernelSizeXY: 3 | 5 | 7  (XY plane kernel radius; also used for Z in symmetric 3D)
+ *   kernelSizeZ:  3 | 5 | 7  (Z kernel radius for asymmetric 3D kernels, defaults to kernelSizeXY)
+ *   applyTo:      'slice' | 'volume'
+ *   sliceZ:       number  (used when applyTo === 'slice')
  * @param {function}     onProgress  called with 0..1
  */
 export async function applyImageFilter(volume, dims, options, onProgress) {
-  const { mode, filterType, kernelSize, applyTo, sliceZ } = options;
+  const { mode, filterType, applyTo, sliceZ } = options;
+  const ksXY = options.kernelSizeXY ?? options.kernelSize ?? 3;
+  const ksZ  = options.kernelSizeZ  ?? ksXY;
   const [dimX, dimY, dimZ] = dims;
-  const h = (kernelSize - 1) >> 1;
+  const hXY = (ksXY - 1) >> 1;
+  const hZ  = (ksZ  - 1) >> 1;
   const sliceSize = dimX * dimY;
 
   // Snapshot — read neighbours from src, write filtered values to volume
   const src = new Float32Array(volume);
-  const gaussW = filterType === 'sigma' ? gaussianWeights(kernelSize, mode) : null;
+  const gaussW = filterType === 'sigma' ? gaussianWeights(ksXY, ksZ, mode) : null;
 
   const zStart = applyTo === 'slice' ? sliceZ : 0;
   const zEnd   = applyTo === 'slice' ? sliceZ + 1 : dimZ;
@@ -58,23 +63,23 @@ export async function applyImageFilter(volume, dims, options, onProgress) {
         if (filterType === 'median') {
           const vals = [];
           if (mode === '2d') {
-            for (let dy = -h; dy <= h; dy++) {
+            for (let dy = -hXY; dy <= hXY; dy++) {
               const ny = y + dy;
               if (ny < 0 || ny >= dimY) continue;
-              for (let dx = -h; dx <= h; dx++) {
+              for (let dx = -hXY; dx <= hXY; dx++) {
                 const nx = x + dx;
                 if (nx < 0 || nx >= dimX) continue;
                 vals.push(src[z * sliceSize + ny * dimX + nx]);
               }
             }
           } else {
-            for (let dz = -h; dz <= h; dz++) {
+            for (let dz = -hZ; dz <= hZ; dz++) {
               const nz = z + dz;
               if (nz < 0 || nz >= dimZ) continue;
-              for (let dy = -h; dy <= h; dy++) {
+              for (let dy = -hXY; dy <= hXY; dy++) {
                 const ny = y + dy;
                 if (ny < 0 || ny >= dimY) continue;
-                for (let dx = -h; dx <= h; dx++) {
+                for (let dx = -hXY; dx <= hXY; dx++) {
                   const nx = x + dx;
                   if (nx < 0 || nx >= dimX) continue;
                   vals.push(src[nz * sliceSize + ny * dimX + nx]);
@@ -89,9 +94,9 @@ export async function applyImageFilter(volume, dims, options, onProgress) {
           // Mean or Gaussian-weighted mean
           let sum = 0, totalW = 0, wi = 0;
           if (mode === '2d') {
-            for (let dy = -h; dy <= h; dy++) {
+            for (let dy = -hXY; dy <= hXY; dy++) {
               const ny = y + dy;
-              for (let dx = -h; dx <= h; dx++) {
+              for (let dx = -hXY; dx <= hXY; dx++) {
                 const nx = x + dx;
                 const w = gaussW ? gaussW[wi++] : 1;
                 if (ny >= 0 && ny < dimY && nx >= 0 && nx < dimX) {
@@ -101,11 +106,11 @@ export async function applyImageFilter(volume, dims, options, onProgress) {
               }
             }
           } else {
-            for (let dz = -h; dz <= h; dz++) {
+            for (let dz = -hZ; dz <= hZ; dz++) {
               const nz = z + dz;
-              for (let dy = -h; dy <= h; dy++) {
+              for (let dy = -hXY; dy <= hXY; dy++) {
                 const ny = y + dy;
-                for (let dx = -h; dx <= h; dx++) {
+                for (let dx = -hXY; dx <= hXY; dx++) {
                   const nx = x + dx;
                   const w = gaussW ? gaussW[wi++] : 1;
                   if (nz >= 0 && nz < dimZ && ny >= 0 && ny < dimY && nx >= 0 && nx < dimX) {
