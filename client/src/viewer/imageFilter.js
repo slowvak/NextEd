@@ -129,4 +129,14 @@ export async function applyImageFilter(volume, dims, options, onProgress) {
     onProgress((z - zStart + 1) / nZ);
     await new Promise(r => setTimeout(r, 0));
   }
+
+  // Clamp filtered values to [min, max] over the processed region
+  if (options.threshold?.enabled) {
+    const tMin = options.threshold.min, tMax = options.threshold.max;
+    const iStart = zStart * sliceSize, iEnd = zEnd * sliceSize;
+    for (let i = iStart; i < iEnd; i++) {
+      if      (volume[i] < tMin) volume[i] = tMin;
+      else if (volume[i] > tMax) volume[i] = tMax;
+    }
+  }
 }

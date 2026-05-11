@@ -28,6 +28,19 @@ export async function applyLabelFilter(segVolume, dims, options, onProgress) {
   } else {
     await _morphOp(segVolume, dims, mode, filterType, ksXY, ksZ, applyTo, sliceZ, labelVal, onProgress);
   }
+
+  // Zero out label values outside [min, max] over the processed region
+  if (options.threshold?.enabled) {
+    const [dimX, dimY] = dims;
+    const sliceSize = dimX * dimY;
+    const tMin = options.threshold.min, tMax = options.threshold.max;
+    const iStart = (options.applyTo === 'slice' ? sliceZ : 0) * sliceSize;
+    const iEnd   = (options.applyTo === 'slice' ? sliceZ + 1 : dims[2]) * sliceSize;
+    for (let i = iStart; i < iEnd; i++) {
+      const v = segVolume[i];
+      if (v !== 0 && (v < tMin || v > tMax)) segVolume[i] = 0;
+    }
+  }
 }
 
 // ── Morphological erode / dilate ─────────────────────────────────────────────

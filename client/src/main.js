@@ -2160,6 +2160,78 @@ function _showFilterModal(state, metadata) {
     return div;
   }
 
+  // ── Volume ranges for threshold sliders ──────────────────────────────────────
+  let imgVolMin = 0, imgVolMax = 1000;
+  if (state.volume?.length) {
+    let lo = Infinity, hi = -Infinity;
+    const step = Math.max(1, (state.volume.length / 50000) | 0);
+    for (let i = 0; i < state.volume.length; i += step) {
+      const v = state.volume[i];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    imgVolMin = Math.floor(lo);
+    imgVolMax = Math.ceil(hi);
+  }
+
+  let lblValMax = 8;
+  if (state.segVolume?.length) {
+    for (let i = 0; i < state.segVolume.length; i++)
+      if (state.segVolume[i] > lblValMax) lblValMax = state.segVolume[i];
+  }
+
+  function makeThresholdSection(prefix, rangeMin, rangeMax) {
+    const sec = document.createElement('div');
+    sec.style.cssText = 'margin-bottom:14px;border-top:1px solid #333;padding-top:12px;';
+
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;';
+    const enableCb = document.createElement('input');
+    enableCb.type = 'checkbox';
+    enableCb.style.cssText = 'cursor:pointer;';
+    const headerLbl = document.createElement('label');
+    headerLbl.textContent = 'Threshold';
+    headerLbl.style.cssText = 'font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;';
+    headerRow.appendChild(enableCb); headerRow.appendChild(headerLbl);
+    sec.appendChild(headerRow);
+    headerLbl.onclick = () => { enableCb.checked = !enableCb.checked; enableCb.onchange(); };
+
+    const body = document.createElement('div');
+    function makeSliderRow(label, defaultVal) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:7px;';
+      const lbl = document.createElement('span');
+      lbl.textContent = label;
+      lbl.style.cssText = 'font-size:12px;color:#aaa;width:28px;flex-shrink:0;';
+      const slider = document.createElement('input');
+      slider.type = 'range'; slider.min = rangeMin; slider.max = rangeMax; slider.step = 1;
+      slider.value = defaultVal; slider.disabled = true;
+      slider.style.cssText = 'flex:1;accent-color:#4a9eff;';
+      const num = document.createElement('input');
+      num.type = 'number'; num.min = rangeMin; num.max = rangeMax; num.step = 1;
+      num.value = defaultVal; num.disabled = true;
+      num.style.cssText = 'width:68px;padding:2px 5px;background:#2a2a2a;border:1px solid #444;border-radius:3px;color:#e0e0e0;font-size:12px;';
+      slider.oninput = () => { num.value = slider.value; };
+      num.oninput   = () => { slider.value = num.value; };
+      row.appendChild(lbl); row.appendChild(slider); row.appendChild(num);
+      return { row, slider, num };
+    }
+    const minCtrl = makeSliderRow('Min', rangeMin);
+    const maxCtrl = makeSliderRow('Max', rangeMax);
+    body.appendChild(minCtrl.row); body.appendChild(maxCtrl.row);
+    sec.appendChild(body);
+
+    const all = [minCtrl.slider, minCtrl.num, maxCtrl.slider, maxCtrl.num];
+    enableCb.onchange = () => all.forEach(el => { el.disabled = !enableCb.checked; });
+
+    return {
+      sec,
+      get enabled() { return enableCb.checked; },
+      get min()     { return Number(minCtrl.num.value); },
+      get max()     { return Number(maxCtrl.num.value); },
+    };
+  }
+
   // ── Tab bar ─────────────────────────────────────────────────────────────────
   let activeTab = 'image';
 
@@ -2206,6 +2278,8 @@ function _showFilterModal(state, metadata) {
   imgPane.appendChild(section('Apply To', radioRow('flt-scope', [
     { label: 'Slice', value: 'slice' }, { label: 'Volume', value: 'volume' }
   ], 'slice')));
+  const imgThresh = makeThresholdSection('img-thr', imgVolMin, imgVolMax);
+  imgPane.appendChild(imgThresh.sec);
   modal.appendChild(imgPane);
 
   // ── Label pane ───────────────────────────────────────────────────────────────
@@ -2218,6 +2292,8 @@ function _showFilterModal(state, metadata) {
   lblPane.appendChild(section('Apply To', radioRow('lbl-scope', [
     { label: 'Slice', value: 'slice' }, { label: 'Volume', value: 'volume' }
   ], 'slice')));
+  const lblThresh = makeThresholdSection('lbl-thr', 0, lblValMax);
+  lblPane.appendChild(lblThresh.sec);
   modal.appendChild(lblPane);
 
   setActiveTab('image');
@@ -2272,10 +2348,11 @@ function _showFilterModal(state, metadata) {
         const kParts = kStr.split('x').map(Number);
         const kernelSizeXY = kParts[0];
         const kernelSizeZ  = kParts[2] ?? kParts[0];
+        const threshold = { enabled: imgThresh.enabled, min: imgThresh.min, max: imgThresh.max };
         const { applyImageFilter } = await import('./viewer/imageFilter.js');
         await applyImageFilter(
           state.volume, state.dims,
-          { mode, filterType, kernelSizeXY, kernelSizeZ, applyTo, sliceZ },
+          { mode, filterType, kernelSizeXY, kernelSizeZ, applyTo, sliceZ, threshold },
           (p) => { progressBar.style.width = `${Math.round(p * 100)}%`; }
         );
         state.notify();
@@ -2294,10 +2371,11 @@ function _showFilterModal(state, metadata) {
         const kParts = kStr.split('x').map(Number);
         const kernelSizeXY = kParts[0];
         const kernelSizeZ  = kParts[2] ?? kParts[0];
+        const threshold = { enabled: lblThresh.enabled, min: lblThresh.min, max: lblThresh.max };
         const { applyLabelFilter } = await import('./viewer/labelFilter.js');
         await applyLabelFilter(
           state.segVolume, state.dims,
-          { mode, filterType, applyTo, sliceZ, labelVal: state.activeLabel, kernelSizeXY, kernelSizeZ },
+          { mode, filterType, applyTo, sliceZ, labelVal: state.activeLabel, kernelSizeXY, kernelSizeZ, threshold },
           (p) => { progressBar.style.width = `${Math.round(p * 100)}%`; }
         );
         state.notify();
