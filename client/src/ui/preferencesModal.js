@@ -400,6 +400,43 @@ export async function openPreferencesModal() {
 
   form.appendChild(aiSec);
 
+  // 4. Filters & Refine Section
+  const filterSec = createSection('Filters & Refine');
+  const filterPrefs = configData.filters || {};
+
+  const kernel2dSelect = document.createElement('select');
+  ['3x3', '5x5', '7x7'].forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v.replace(/x/g, '×');
+    if ((filterPrefs.kernel_2d || '3x3') === v) opt.selected = true;
+    kernel2dSelect.appendChild(opt);
+  });
+  filterSec.appendChild(createInputRow('2D Kernel Size:', kernel2dSelect));
+
+  const kernel3dSelect = document.createElement('select');
+  ['3x3x3', '5x5x3', '5x5x5', '7x7x3', '7x7x5', '7x7x7'].forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v.replace(/x/g, '×');
+    if ((filterPrefs.kernel_3d || '3x3x3') === v) opt.selected = true;
+    kernel3dSelect.appendChild(opt);
+  });
+  filterSec.appendChild(createInputRow('3D Kernel Size:', kernel3dSelect));
+
+  const searchSizeInput = document.createElement('input');
+  searchSizeInput.type = 'number';
+  searchSizeInput.min = '3';
+  searchSizeInput.max = '9';
+  searchSizeInput.step = '1';
+  searchSizeInput.value = filterPrefs.refine_search_size ?? 5;
+  filterSec.appendChild(createInputRow('Refine Search Size:', searchSizeInput));
+
+  const searchNote = document.createElement('div');
+  searchNote.textContent = 'Pixels searched in each direction when snapping contour to image edges (3–9).';
+  searchNote.style.cssText = 'font-size:12px;color:#888;margin-top:4px;padding-left:180px;';
+  filterSec.appendChild(searchNote);
+
+  form.appendChild(filterSec);
+
   // Actions
   const actions = document.createElement('div');
   actions.style.display = 'flex';
@@ -423,6 +460,11 @@ export async function openPreferencesModal() {
       ai: {
         server: aiServerInput.value,
         models: configData.ai?.models || []
+      },
+      filters: {
+        kernel_2d: kernel2dSelect.value,
+        kernel_3d: kernel3dSelect.value,
+        refine_search_size: Math.min(9, Math.max(3, parseInt(searchSizeInput.value, 10) || 5)),
       }
     };
 

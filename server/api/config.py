@@ -28,6 +28,11 @@ DEFAULT_CONFIG = {
     "ai": {
         "server": "http://localhost:8050",
         "models": []
+    },
+    "filters": {
+        "kernel_2d": "3x3",
+        "kernel_3d": "3x3x3",
+        "refine_search_size": 5
     }
 }
 

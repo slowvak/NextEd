@@ -105,13 +105,15 @@ export function openHelpModal() {
   modal.appendChild(section('Navigation', [
     ['4-Panel View', 'Axial, Sagittal, Coronal, Oblique panels shown simultaneously'],
     ['Scroll Slices', 'Click-drag up/down on any panel, or use mouse wheel'],
+    ['Pan', 'Middle-click drag to pan the view in any panel'],
+    ['Zoom', 'Ctrl+scroll (mouse wheel) to zoom in/out centred on the cursor position'],
     ['Slice Slider', 'Drag the slider below each panel to jump to a slice'],
     ['Single-View', 'Click a panel\'s name label to expand it to full screen; click again to restore'],
     ['Crosshair Sync', 'Click or drag with Crosshair tool (\u2316) \u2014 all panels update to that world position'],
   ]));
 
   modal.appendChild(section('Window / Level', [
-    ['Adjust W/L', 'Right-click drag on any panel \u2014 left/right changes Window width, up/down changes Level'],
+    ['Adjust W/L', 'Ctrl+drag on any panel \u2014 left/right changes Window width, up/down changes Level'],
     ['W/L readout', 'Current values shown as "W: nnn L: nnn" in the tool panel'],
     ['Presets', 'Brain, Bone, Lung, Abd buttons apply standard radiological window/level presets instantly'],
   ]));
@@ -133,11 +135,32 @@ export function openHelpModal() {
     ['Propagate', 'Copies the label from the adjacent slice and refines it \u2014 step through a stack slice by slice'],
     ['Fill Holes', 'Fills enclosed background regions within each connected component of the active label on this slice'],
     ['Clear Slice', 'Removes all voxels of the active label on the current slice only'],
-    ['Filter', 'Smooths the raw image intensities. Options: 2D/3D, Mean/Median/Sigma (Gaussian-weighted mean), kernel size 3/5/7, apply to current Slice or entire Volume. A progress bar shows completion.'],
+    ['Filter — Image tab', 'Smooths raw image intensities. Choose 2D or 3D mode, filter type (Mean, Median, or Sigma — Gaussian-weighted mean), and apply to the current Slice or entire Volume. Kernel size is taken from Preferences. Optional Threshold section: enable to clamp output values to a Min–Max range. A progress bar shows completion.'],
+    ['Filter — Label tab', 'Morphological operations on the active segmentation label. Choose 2D or 3D mode, operation (Erode, Dilate, or Largest Connected Component), and apply to Slice or Volume. Erode shrinks the label by one kernel radius; Dilate expands it; Largest Connected keeps only the largest connected region and removes isolated fragments. Optional Threshold section: enable to zero out label voxels whose value falls outside Min–Max. Kernel size is taken from Preferences.'],
     ['Load Label Mask', 'Shown when no mask is loaded. Opens a file picker \u2014 select any NIfTI (.nii or .nii.gz) file to load it as the label mask. Labels are auto-detected from the unique non-zero values in the file.'],
     ['Save Label As...', 'Shown once a mask exists. Opens a dialog with the full suggested save path pre-filled (same directory as the source volume, named <volume>_seg.nii.gz). Edit the path as needed, then click Save.'],
     ['Auto-load on open', 'When opening a volume, SIGMA checks for a companion <name>_seg.nii.gz file in the same folder and offers to load it automatically.'],
     ['Unsaved changes', 'If you click \u2190 Back to Volumes with unsaved mask changes, SIGMA will prompt you to save or discard before leaving.'],
+  ]));
+
+  modal.appendChild(section('Preferences', [
+    ['Open', 'Click the ⚙ gear icon (top-right) to open Preferences. Changes take effect immediately and are saved to the server.'],
+    ['2D Kernel Size', 'Kernel used by Image and Label filters in 2D mode. Options: 3×3, 5×5, 7×7.'],
+    ['3D Kernel Size', 'Kernel used in 3D mode. Options: 3×3×3, 5×5×3, 5×5×5, 7×7×3, 7×7×5, 7×7×7. The first two numbers are the XY radius; the third is the Z radius — useful when slice thickness differs from in-plane resolution.'],
+    ['Refine Search Size', 'Number of pixels searched outward from the label boundary when snapping to an image edge using Refine or Propagate. Range 3–9 (default 5).'],
+  ]));
+
+  modal.appendChild(section('RGB Images', [
+    ['Loading', 'SIGMA detects RGB volumes automatically. The image is displayed using all three colour channels simultaneously.'],
+    ['Brightness / Contrast', 'Instead of per-channel Window/Level sliders, RGB volumes use Brightness (shifts all channels equally) and Contrast (scales all channels around the mid-point). Ctrl+drag still works: left/right adjusts Contrast, up/down adjusts Brightness.'],
+    ['Filters', 'Mean, Median, and Sigma filters operate on each channel independently then recombine. Refine uses the Di Zenzo vector gradient — edge strength is computed across all three channels simultaneously for accurate colour boundary detection.'],
+    ['Threshold', 'Threshold is disabled for RGB volumes.'],
+  ]));
+
+  modal.appendChild(section('4D Volumes', [
+    ['Detection', 'When SIGMA loads a 4D NIfTI (e.g., a time series), a mapping dialog appears before the volume is displayed.'],
+    ['Single Frame', 'Select a single index along the 4th dimension. The chosen frame is loaded as a standard 3D volume.'],
+    ['Axis Stack', 'Fix a slice position along one of the spatial axes and stack all 4th-dimension frames along that axis. For example, fixing Z=25 in a time series loads slice 25 from every time point as successive Z-planes — turning a time series into a 3D spatial comparison stack.'],
   ]));
 
   modal.appendChild(section('Labels', [
@@ -162,11 +185,13 @@ export function openHelpModal() {
     ['Ctrl+Z', 'Undo last edit'],
     ['Space', 'Toggle mask overlay on/off (restores previous opacity when turned back on)'],
     ['Escape', 'Close any open modal'],
+    ['Middle-drag', 'Pan the view'],
+    ['Ctrl+Scroll', 'Zoom in/out (centred on cursor)'],
   ]));
 
   // Footer tip
   const footer = document.createElement('p');
-  footer.textContent = 'Tip: right-click drag on any viewer panel to adjust Window/Level.';
+  footer.textContent = 'Tip: Ctrl+drag on any viewer panel to adjust Window/Level.';
   footer.style.color = '#666';
   footer.style.fontSize = '0.85rem';
   footer.style.marginTop = '0.5rem';

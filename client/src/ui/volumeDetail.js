@@ -46,11 +46,21 @@ export function renderEmptyState(container) {
   container.innerHTML = '';
   const div = document.createElement('div');
   div.className = 'empty-state';
-  const h2 = document.createElement('h2');
-  h2.textContent = 'No Volume Selected';
-  const p = document.createElement('p');
-  p.textContent = 'Select a volume from the list to view details.';
-  div.appendChild(h2);
-  div.appendChild(p);
+
+  if (localStorage.getItem('sigma_splash_seen')) {
+    const img = document.createElement('img');
+    img.src = '/Sigma_Splash.png';
+    img.alt = 'ΣIGMA';
+    img.className = 'empty-state-splash';
+    div.appendChild(img);
+  } else {
+    const h2 = document.createElement('h2');
+    h2.textContent = 'No Volume Selected';
+    const p = document.createElement('p');
+    p.textContent = 'Select a volume from the list to view details.';
+    div.appendChild(h2);
+    div.appendChild(p);
+  }
+
   container.appendChild(div);
 }

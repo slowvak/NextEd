@@ -28,7 +28,7 @@
  * @returns {{ indices: number[], oldValues: number[] } | null}
  *          Undo diff, or null if no pixels found
  */
-export function refineContourAxial(volume, segVolume, dims, sliceZ, labelVal) {
+export function refineContourAxial(volume, segVolume, dims, sliceZ, labelVal, searchDist = 2) {
   const [dimX, dimY] = dims;
   const sliceSize = dimX * dimY;
   const volOffset = sliceZ * sliceSize;
@@ -73,7 +73,7 @@ export function refineContourAxial(volume, segVolume, dims, sliceZ, labelVal) {
   //     outward normal) so we only snap to edges with consistent polarity.
   const dominantSign = computeDominantGradientSign(boundary, normals, smoothed, dimX, dimY);
 
-  const shifts = computeShifts(boundary, normals, gradMag, smoothed, dimX, dimY, 2, dominantSign);
+  const shifts = computeShifts(boundary, normals, gradMag, smoothed, dimX, dimY, searchDist, dominantSign);
 
   // 6. Smooth the shift values (average with neighbors along boundary)
   const smoothedShifts = smoothShifts(shifts, boundary, dimX, 3);

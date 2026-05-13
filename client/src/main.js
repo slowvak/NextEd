@@ -1010,7 +1010,8 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
       state.segVolume,
       state.dims,
       sliceZ,
-      state.activeLabel
+      state.activeLabel,
+      appConfig.filters?.refine_search_size ?? 5
     );
     if (!diff) {
       alert('No pixels with selected label on this slice.');
@@ -1105,7 +1106,8 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
         state.segVolume,
         state.dims,
         sliceZ,
-        labelVal
+        labelVal,
+        appConfig.filters?.refine_search_size ?? 5
       );
       if (refineDiff) {
         state.pushUndo(refineDiff);
@@ -1508,6 +1510,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
           <button id="labels-all-on-btn" title="Show all labels" style="background:none;border:1px solid #555;border-radius:3px;color:#000;cursor:pointer;font-size:10px;padding:1px 5px;line-height:1.4;">All On</button>
           <button id="labels-all-off-btn" title="Hide all labels" style="background:none;border:1px solid #555;border-radius:3px;color:#000;cursor:pointer;font-size:10px;padding:1px 5px;line-height:1.4;">All Off</button>
           <button id="add-label-btn" title="Add Label" style="background:none;border:none;color:#4a9eff;cursor:pointer;font-size:16px;">➕</button>
+          <button id="delete-labels-btn" title="Delete label mask" style="background:none;border:1px solid #a33;border-radius:3px;color:#e55;cursor:pointer;font-size:10px;padding:1px 5px;line-height:1.4;">Delete Labels</button>
         </div>
       </div>
     `;
@@ -1515,6 +1518,20 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     labelsSec.querySelector('#add-label-btn').addEventListener('click', handleAddLabel);
     labelsSec.querySelector('#labels-all-on-btn').addEventListener('click', () => state.setAllLabelsVisible(true));
     labelsSec.querySelector('#labels-all-off-btn').addEventListener('click', () => state.setAllLabelsVisible(false));
+    labelsSec.querySelector('#delete-labels-btn').addEventListener('click', () => {
+      if (!confirm('Delete the label mask and all labels?')) return;
+      state.segVolume = null;
+      state.segDims = null;
+      state.labels = new Map();
+      state.colorLUT = null;
+      state.activeLabel = 0;
+      state.undoStack = [];
+      state.segVersion++;
+      _maskLoaded = false;
+      _savedSegVersion = state.segVersion;
+      _showLoadBtn();
+      state.notify();
+    });
 
     // Always show label 0 (background/erase) at top
     {
@@ -2299,7 +2316,6 @@ function _showFilterModal(state, metadata) {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;gap:12px;flex-wrap:wrap;';
     options.forEach(({ label, value }) => {
-      const id = `flt-${name}-${value}`;
       const lbl = document.createElement('label');
       lbl.style.cssText = 'display:flex;align-items:center;gap:4px;cursor:pointer;';
       const inp = document.createElement('input');
@@ -2321,23 +2337,145 @@ function _showFilterModal(state, metadata) {
     return div;
   }
 
-  const title = document.createElement('div');
-  title.textContent = 'Label Filter';
-  title.style.cssText = 'font-size:15px;font-weight:600;margin-bottom:18px;color:#fff;';
-  modal.appendChild(title);
+  // ── Volume ranges for threshold sliders ──────────────────────────────────────
+  let imgVolMin = 0, imgVolMax = 1000;
+  if (state.volume?.length) {
+    let lo = Infinity, hi = -Infinity;
+    const step = Math.max(1, (state.volume.length / 50000) | 0);
+    for (let i = 0; i < state.volume.length; i += step) {
+      const v = state.volume[i];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    imgVolMin = Math.floor(lo);
+    imgVolMax = Math.ceil(hi);
+  }
 
-  modal.appendChild(section('Mode', radioRow('flt-mode', [{ label: '2D', value: '2d' }, { label: '3D', value: '3d' }], '2d')));
-  modal.appendChild(section('Filter Type', radioRow('flt-type', [
+  let lblValMax = 8;
+  if (state.segVolume?.length) {
+    for (let i = 0; i < state.segVolume.length; i++)
+      if (state.segVolume[i] > lblValMax) lblValMax = state.segVolume[i];
+  }
+
+  function makeThresholdSection(prefix, rangeMin, rangeMax) {
+    const sec = document.createElement('div');
+    sec.style.cssText = 'margin-bottom:14px;border-top:1px solid #333;padding-top:12px;';
+
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;';
+    const enableCb = document.createElement('input');
+    enableCb.type = 'checkbox';
+    enableCb.style.cssText = 'cursor:pointer;';
+    const headerLbl = document.createElement('label');
+    headerLbl.textContent = 'Threshold';
+    headerLbl.style.cssText = 'font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;';
+    headerRow.appendChild(enableCb); headerRow.appendChild(headerLbl);
+    sec.appendChild(headerRow);
+    headerLbl.onclick = () => { enableCb.checked = !enableCb.checked; enableCb.onchange(); };
+
+    const body = document.createElement('div');
+    function makeSliderRow(label, defaultVal) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:7px;';
+      const lbl = document.createElement('span');
+      lbl.textContent = label;
+      lbl.style.cssText = 'font-size:12px;color:#aaa;width:28px;flex-shrink:0;';
+      const slider = document.createElement('input');
+      slider.type = 'range'; slider.min = rangeMin; slider.max = rangeMax; slider.step = 1;
+      slider.value = defaultVal; slider.disabled = true;
+      slider.style.cssText = 'flex:1;accent-color:#4a9eff;';
+      const num = document.createElement('input');
+      num.type = 'number'; num.min = rangeMin; num.max = rangeMax; num.step = 1;
+      num.value = defaultVal; num.disabled = true;
+      num.style.cssText = 'width:68px;padding:2px 5px;background:#2a2a2a;border:1px solid #444;border-radius:3px;color:#e0e0e0;font-size:12px;';
+      slider.oninput = () => { num.value = slider.value; };
+      num.oninput   = () => { slider.value = num.value; };
+      row.appendChild(lbl); row.appendChild(slider); row.appendChild(num);
+      return { row, slider, num };
+    }
+    const minCtrl = makeSliderRow('Min', rangeMin);
+    const maxCtrl = makeSliderRow('Max', rangeMax);
+    body.appendChild(minCtrl.row); body.appendChild(maxCtrl.row);
+    sec.appendChild(body);
+
+    const all = [minCtrl.slider, minCtrl.num, maxCtrl.slider, maxCtrl.num];
+    enableCb.onchange = () => all.forEach(el => { el.disabled = !enableCb.checked; });
+
+    return {
+      sec,
+      get enabled() { return enableCb.checked; },
+      get min()     { return Number(minCtrl.num.value); },
+      get max()     { return Number(maxCtrl.num.value); },
+    };
+  }
+
+  // ── Tab bar ─────────────────────────────────────────────────────────────────
+  let activeTab = 'image';
+
+  const tabBar = document.createElement('div');
+  tabBar.style.cssText = 'display:flex;gap:2px;margin-bottom:18px;border-bottom:1px solid #3a3a3a;';
+
+  function makeTab(label, key) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.dataset.tab = key;
+    btn.style.cssText = 'padding:6px 18px;border-radius:4px 4px 0 0;border:1px solid transparent;border-bottom:none;background:transparent;color:#888;cursor:pointer;font-size:13px;margin-bottom:-1px;';
+    return btn;
+  }
+
+  const imgTab = makeTab('Image', 'image');
+  const lblTab = makeTab('Label', 'label');
+  tabBar.appendChild(imgTab);
+  tabBar.appendChild(lblTab);
+  modal.appendChild(tabBar);
+
+  function setActiveTab(key) {
+    activeTab = key;
+    imgPane.style.display = key === 'image' ? '' : 'none';
+    lblPane.style.display = key === 'label' ? '' : 'none';
+    [imgTab, lblTab].forEach(t => {
+      const isActive = t.dataset.tab === key;
+      t.style.background    = isActive ? '#1e1e1e' : 'transparent';
+      t.style.color         = isActive ? '#e0e0e0' : '#888';
+      t.style.fontWeight    = isActive ? '600' : 'normal';
+      t.style.borderColor   = isActive ? '#555' : 'transparent';
+    });
+  }
+
+  imgTab.onclick = () => setActiveTab('image');
+  lblTab.onclick = () => setActiveTab('label');
+
+  // ── Image pane ───────────────────────────────────────────────────────────────
+  const imgPane = document.createElement('div');
+  imgPane.appendChild(section('Mode', radioRow('flt-mode', [{ label: '2D', value: '2d' }, { label: '3D', value: '3d' }], '2d')));
+  imgPane.appendChild(section('Filter Type', radioRow('flt-type', [
     { label: 'Mean', value: 'mean' }, { label: 'Median', value: 'median' }, { label: 'Sigma', value: 'sigma' }
   ], 'median')));
-  modal.appendChild(section('Kernel Size', radioRow('flt-kernel', [
-    { label: '3', value: '3' }, { label: '5', value: '5' }, { label: '7', value: '7' }
-  ], '3')));
-  modal.appendChild(section('Apply To', radioRow('flt-scope', [
+  imgPane.appendChild(section('Apply To', radioRow('flt-scope', [
     { label: 'Slice', value: 'slice' }, { label: 'Volume', value: 'volume' }
   ], 'slice')));
+  const imgThresh = makeThresholdSection('img-thr', imgVolMin, imgVolMax);
+  imgPane.appendChild(imgThresh.sec);
+  modal.appendChild(imgPane);
 
-  // Progress section (hidden until Go)
+  // ── Label pane ───────────────────────────────────────────────────────────────
+  const lblPane = document.createElement('div');
+  lblPane.style.display = 'none';
+  lblPane.appendChild(section('Mode', radioRow('lbl-mode', [{ label: '2D', value: '2d' }, { label: '3D', value: '3d' }], '2d')));
+  lblPane.appendChild(section('Filter Type', radioRow('lbl-type', [
+    { label: 'Erode', value: 'erode' }, { label: 'Dilate', value: 'dilate' }, { label: 'Largest Connected', value: 'largest_connected' }
+  ], 'erode')));
+  lblPane.appendChild(section('Apply To', radioRow('lbl-scope', [
+    { label: 'Slice', value: 'slice' }, { label: 'Volume', value: 'volume' }
+  ], 'slice')));
+  const lblThresh = makeThresholdSection('lbl-thr', 0, lblValMax);
+  lblPane.appendChild(lblThresh.sec);
+  modal.appendChild(lblPane);
+
+  setActiveTab('image');
+
+  // ── Progress bar ─────────────────────────────────────────────────────────────
   const progressSec = document.createElement('div');
   progressSec.style.cssText = 'margin-bottom:14px;display:none;';
   const progressLabel = document.createElement('div');
@@ -2351,7 +2489,7 @@ function _showFilterModal(state, metadata) {
   progressSec.appendChild(progressLabel); progressSec.appendChild(progressTrack);
   modal.appendChild(progressSec);
 
-  // Buttons row
+  // ── Buttons ───────────────────────────────────────────────────────────────────
   const btnRow = document.createElement('div');
   btnRow.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;margin-top:4px;';
 
@@ -2369,35 +2507,58 @@ function _showFilterModal(state, metadata) {
       const el = modal.querySelector(`input[name="${name}"]:checked`);
       return el ? el.value : null;
     };
-    const mode       = getRadio('flt-mode');
-    const filterType = getRadio('flt-type');
-    const kernelSize = parseInt(getRadio('flt-kernel'), 10);
-    const applyTo    = getRadio('flt-scope');
 
-    if (!state.volume || !state.dims) {
-      alert('No image loaded.');
-      return;
-    }
-
-    // Lock UI
     goBtn.disabled = true; cancelBtn.disabled = true;
     progressSec.style.display = '';
     progressBar.style.width = '0%';
-
     const sliceZ = state.cursor[2];
 
     try {
-      const { applyImageFilter } = await import('./viewer/imageFilter.js');
-      await applyImageFilter(
-        state.volume, state.dims,
-        { mode, filterType, kernelSize, applyTo, sliceZ },
-        (p) => { progressBar.style.width = `${Math.round(p * 100)}%`; }
-      );
-
-      state.notify();
-      overlay.remove();
-      _promptSaveNifti(state, metadata);
-      return;
+      if (activeTab === 'image') {
+        if (!state.volume || !state.dims) { alert('No image loaded.'); return; }
+        const mode       = getRadio('flt-mode');
+        const filterType = getRadio('flt-type');
+        const applyTo    = getRadio('flt-scope');
+        const kStr = mode === '2d'
+          ? (appConfig.filters?.kernel_2d || '3x3')
+          : (appConfig.filters?.kernel_3d || '3x3x3');
+        const kParts = kStr.split('x').map(Number);
+        const kernelSizeXY = kParts[0];
+        const kernelSizeZ  = kParts[2] ?? kParts[0];
+        const threshold = { enabled: imgThresh.enabled, min: imgThresh.min, max: imgThresh.max };
+        const { applyImageFilter } = await import('./viewer/imageFilter.js');
+        await applyImageFilter(
+          state.volume, state.dims,
+          { mode, filterType, kernelSizeXY, kernelSizeZ, applyTo, sliceZ, threshold },
+          (p) => { progressBar.style.width = `${Math.round(p * 100)}%`; }
+        );
+        state.notify();
+        overlay.remove();
+        _promptSaveNifti(state, metadata);
+        return;
+      } else {
+        if (!state.segVolume || !state.dims) { alert('No segmentation loaded.'); return; }
+        if (!state.activeLabel) { alert('No label selected.'); return; }
+        const mode       = getRadio('lbl-mode');
+        const filterType = getRadio('lbl-type');
+        const applyTo    = getRadio('lbl-scope');
+        const kStr = mode === '2d'
+          ? (appConfig.filters?.kernel_2d || '3x3')
+          : (appConfig.filters?.kernel_3d || '3x3x3');
+        const kParts = kStr.split('x').map(Number);
+        const kernelSizeXY = kParts[0];
+        const kernelSizeZ  = kParts[2] ?? kParts[0];
+        const threshold = { enabled: lblThresh.enabled, min: lblThresh.min, max: lblThresh.max };
+        const { applyLabelFilter } = await import('./viewer/labelFilter.js');
+        await applyLabelFilter(
+          state.segVolume, state.dims,
+          { mode, filterType, applyTo, sliceZ, labelVal: state.activeLabel, kernelSizeXY, kernelSizeZ, threshold },
+          (p) => { progressBar.style.width = `${Math.round(p * 100)}%`; }
+        );
+        state.notify();
+        overlay.remove();
+        return;
+      }
     } catch (err) {
       alert(`Filter error: ${err.message}`);
     }
