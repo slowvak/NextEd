@@ -95,9 +95,9 @@ async function init() {
       if (samples.length === 0) return;
       samples.sort((a, b) => a - b);
       const p05 = samples[Math.floor(samples.length * 0.05)];
-      const p95 = samples[Math.floor(samples.length * 0.95)];
-      state.windowCenter = (p05 + p95) / 2;
-      state.windowWidth = Math.max(p95 - p05, 1);
+      const p98 = samples[Math.floor(samples.length * 0.98)];
+      state.windowCenter = (p05 + p98) / 2;
+      state.windowWidth = Math.max(p98 - p05, 1);
       state.notify();
     }
   });

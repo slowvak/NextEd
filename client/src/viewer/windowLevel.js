@@ -12,11 +12,11 @@
  * Follows standard PACS convention:
  *   - Drag right  (dx > 0) → wider window (less contrast)
  *   - Drag left   (dx < 0) → narrower window (more contrast)
- *   - Drag down   (dy > 0) → lower center → brighter image
- *   - Drag up     (dy < 0) → higher center → darker image
+ *   - Drag up     (dy < 0) → lower center → brighter image
+ *   - Drag down   (dy > 0) → higher center → darker image
  *
  * @param {number} dx - Horizontal pixel delta (right = wider)
- * @param {number} dy - Vertical pixel delta (down = brighter = lower center)
+ * @param {number} dy - Vertical pixel delta (up = brighter = lower center)
  * @param {number} currentCenter - Current window center
  * @param {number} currentWidth - Current window width
  * @returns {{ center: number, width: number }}
@@ -24,7 +24,7 @@
 export function computeWLDrag(dx, dy, currentCenter, currentWidth) {
   const sensitivity = currentWidth / 300;
   const width = Math.max(1, currentWidth + dx * sensitivity);
-  const center = currentCenter - dy * sensitivity;
+  const center = currentCenter + dy * sensitivity;
   return { center, width };
 }
 
