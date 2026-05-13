@@ -8,6 +8,7 @@ export function renderVolumeDetail(volume, container, onOpen) {
 
   const fields = [
     { label: 'Format', value: volume.format.toUpperCase() },
+    { label: 'Orientation', value: volume.orientation_label || 'Unknown' },
     { label: 'Dimensions', value: `${volume.dimensions[0]} x ${volume.dimensions[1]} x ${volume.dimensions[2]}` },
     { label: 'Voxel Spacing', value: volume.voxel_spacing ? volume.voxel_spacing.map(s => s.toFixed(2)).join(' x ') + ' mm' : 'N/A' },
     { label: 'Modality', value: volume.modality || 'Unknown' },

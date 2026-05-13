@@ -101,6 +101,7 @@ async def _register_new_nifti(path: str) -> None:
         voxel_spacing=entry.get("voxel_spacing"),
         dtype=entry.get("dtype"),
         modality=entry.get("modality", "unknown"),
+        orientation_label=entry.get("orientation_label"),
     )
     register_volume(vol_id, meta, entry["path"], entry["format"])
     _catalog.append(meta)
@@ -132,6 +133,7 @@ async def _register_dicom_directory(dir_path: str) -> None:
             modality=entry.get("modality", "unknown"),
             study_instance_uid=entry.get("study_instance_uid"),
             series_instance_uid=entry.get("series_instance_uid"),
+            orientation_label=entry.get("orientation_label"),
         )
         register_volume(vol_id, meta, entry["path"], entry["format"])
         _catalog.append(meta)
