@@ -1,11 +1,11 @@
 import './styles.css';
 import { showSplashIfNeeded } from './ui/splashScreen.js';
 import { createAppShell } from './ui/appShell.js';
-import { renderVolumeList, addVolumeToList, removeVolumeFromList } from './ui/volumeList.js';
+import { renderVolumeList, addVolumeToList, removeVolumeFromList, setOpenLinkedWindowCallback } from './ui/volumeList.js';
 import { renderVolumeDetail, renderEmptyState } from './ui/volumeDetail.js';
 import { initWebSocket, onWsEvent, onStatusChange } from './wsClient.js';
 import { createConnectionStatus, updateConnectionStatus } from './ui/connectionStatus.js';
-import { fetchVolumes, fetchVolumeMetadata, fetchVolumeData } from './api.js';
+import { fetchVolumes, fetchVolumeMetadata, fetchVolumeData, resampleVolume, requestRegistration } from './api.js';
 import { ViewerState } from './viewer/ViewerState.js';
 import { FourPanelLayout } from './viewer/FourPanelLayout.js';
 import { createPresetBar } from './ui/presetBar.js';
@@ -15,9 +15,12 @@ import { openPreferencesModal } from './ui/preferencesModal.js';
 import { openHelpModal } from './ui/helpModal.js';
 import { showFolderPickerModal } from './ui/folderPickerModal.js';
 import { getTaskParams, loadVolumeByPath, loadMaskByPath, completeTask, buildTaskUI } from './taskMode.js';
+import { SyncBridge } from './multivolume/SyncBridge.js';
+import { showDimMismatchModal } from './multivolume/DimMismatchModal.js';
 
 let currentVolume = null;
 let currentLayout = null;
+let currentSyncBridge = null;
 
 async function init() {
   await showSplashIfNeeded();
@@ -81,6 +84,13 @@ async function init() {
     }
   });
 
+  // Broadcast segmentation after every brush stroke.
+  // Must be on window (not document) so ViewerPanel's document-level mouseup handler
+  // finishes painting before we read the segVolume.
+  window.addEventListener('mouseup', () => {
+    currentSyncBridge?.broadcastSeg();
+  });
+
   renderEmptyState(detailPanel);
 
   const selectHandler = (vol) => {
@@ -98,6 +108,9 @@ async function init() {
     }
     renderVolumeDetail(vol, detailPanel, (volume) => openVolume(volume, { detailPanel, sidebar, toolPanel }));
   };
+
+  // Register the link-button callback for the volume list
+  setOpenLinkedWindowCallback((volumeId) => openLinkedWindow(volumeId, { detailPanel, sidebar, toolPanel }));
 
   try {
     const volumes = await fetchVolumes();
@@ -249,7 +262,19 @@ async function initTaskMode(taskParams) {
         // Show success
         const bar = document.querySelector('.task-bar');
         if (bar) {
-          bar.innerHTML = '<div class="task-prompt" style="color:#6fcf97;">Task completed successfully. You may close this window.</div>';
+          // Notify opener if this was a popup
+          if (window.opener) {
+            window.opener.postMessage({ type: 'sigma_task_completed', result }, '*');
+          }
+
+          if (taskParams.returnUrl) {
+            bar.innerHTML = `<div class="task-prompt" style="color:#6fcf97;">Task completed. Redirecting...</div>`;
+            setTimeout(() => {
+              window.location.href = taskParams.returnUrl;
+            }, 1500);
+          } else {
+            bar.innerHTML = '<div class="task-prompt" style="color:#6fcf97;">Task completed successfully. You may close this window.</div>';
+          }
         }
       } catch (err) {
         console.error('[NextEd] Task completion failed:', err);
@@ -285,6 +310,103 @@ async function initTaskMode(taskParams) {
     banner.textContent = `Task failed: ${err.message}`;
     detailPanel.appendChild(banner);
   }
+}
+
+/**
+ * Open a volume in a new linked window sharing the same sync group.
+ * Creates or reuses a sync group UUID, updates the current page URL,
+ * attaches a SyncBridge to the current layout if not already done,
+ * then opens a new tab with the target volume and sync group ID.
+ */
+function openLinkedWindow(volumeId, panels) {
+  let syncId = new URLSearchParams(location.search).get('sync');
+  if (!syncId) {
+    syncId = crypto.randomUUID();
+    history.pushState({}, '', `?sync=${syncId}`);
+    _attachSyncBridge(syncId, panels);
+  }
+  window.open(`/?sync=${syncId}`, '_blank');
+}
+
+/**
+ * Create a SyncBridge for the current layout, destroying any previous one.
+ * Handles dim mismatch by asking the user what to do when another window joins.
+ */
+function _showSyncOverlay(message) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.45);z-index:3000;display:flex;align-items:center;justify-content:center;cursor:wait;';
+  el.innerHTML = `<div style="background:#1e1e1e;padding:24px 32px;border-radius:8px;border:1px solid #3a3a3a;color:#e0e0e0;font-size:14px;display:flex;align-items:center;gap:12px;">
+    <div style="width:18px;height:18px;border:2px solid #4a9eff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;"></div>
+    ${message}
+  </div>`;
+  if (!document.getElementById('sigma-spin-style')) {
+    const s = document.createElement('style');
+    s.id = 'sigma-spin-style';
+    s.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(s);
+  }
+  document.body.style.cursor = 'wait';
+  document.body.appendChild(el);
+  return { remove() { el.remove(); document.body.style.cursor = ''; } };
+}
+
+function _attachSyncBridge(syncId, { detailPanel, sidebar, toolPanel }) {
+  if (!currentLayout) return;
+  if (currentSyncBridge) {
+    currentSyncBridge.destroy();
+    currentSyncBridge = null;
+  }
+  const state = currentLayout.state;
+  const localVolumeId = currentVolume?.id;
+  currentSyncBridge = new SyncBridge(syncId, state, state.dims, localVolumeId, async ({ dims: remoteDims, volumeId: remoteVolumeId }) => {
+    // Check for dimension mismatch
+    const ld = state.dims;
+    const rd = remoteDims;
+    if (ld[0] === rd[0] && ld[1] === rd[1] && ld[2] === rd[2]) return;
+
+    const choice = await showDimMismatchModal(ld, rd);
+    if (choice === 'ignore') return;
+
+    if (choice === 'interpolate') {
+      const overlay = _showSyncOverlay('Resampling volume…');
+      try {
+        const { buffer, newDims } = await resampleVolume(localVolumeId, rd);
+        const resampled = new Float32Array(buffer);
+        state.dims = newDims;
+        state.cursor = [Math.floor(newDims[0]/2), Math.floor(newDims[1]/2), Math.floor(newDims[2]/2)];
+        state.volume = resampled;
+        currentLayout.setVolume(resampled, newDims, state.spacing);
+        _attachSyncBridge(syncId, { detailPanel, sidebar, toolPanel });
+      } catch (e) {
+        console.error('[Sync] Resample failed:', e);
+        alert(`Resampling failed: ${e.message}`);
+      } finally {
+        overlay.remove();
+      }
+    } else if (choice === 'register') {
+      if (!remoteVolumeId) {
+        alert('Cannot register: remote volume ID is unknown.');
+        return;
+      }
+      const overlay = _showSyncOverlay('Running volumetric registration… (30–60 s)');
+      try {
+        const { buffer, newDims, spacing } = await requestRegistration(localVolumeId, remoteVolumeId);
+        const resampled = new Float32Array(buffer);
+        state.dims = newDims;
+        state.cursor = [Math.floor(newDims[0]/2), Math.floor(newDims[1]/2), Math.floor(newDims[2]/2)];
+        state.volume = resampled;
+        if (spacing) state.spacing = spacing;
+        // W/L intentionally kept from source volume — registration doesn't change intensities
+        currentLayout.setVolume(resampled, newDims, spacing ?? state.spacing);
+        _attachSyncBridge(syncId, { detailPanel, sidebar, toolPanel });
+      } catch (e) {
+        console.error('[Sync] Registration failed:', e);
+        alert(`Registration failed: ${e.message}`);
+      } finally {
+        overlay.remove();
+      }
+    }
+  });
 }
 
 function _confirmLoadSeg(filename) {
@@ -409,7 +531,11 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
     };
     state.subscribe(saveLabels);
 
-    // Clean up previous layout
+    // Clean up previous layout and sync bridge
+    if (currentSyncBridge) {
+      currentSyncBridge.destroy();
+      currentSyncBridge = null;
+    }
     if (currentLayout) {
       currentLayout.destroy();
       currentLayout = null;
@@ -467,6 +593,13 @@ async function openVolume(volume, { detailPanel, sidebar, toolPanel }) {
     sidebar.style.display = 'none';
     _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel);
     toolPanel.style.display = 'flex';
+
+    // If the page already has a ?sync param (e.g. we were opened as a linked window),
+    // attach the sync bridge now that the volume is loaded.
+    const existingSyncId = new URLSearchParams(location.search).get('sync');
+    if (existingSyncId && !currentSyncBridge) {
+      _attachSyncBridge(existingSyncId, { detailPanel, sidebar, toolPanel });
+    }
 
   } catch (err) {
     detailPanel.innerHTML = '';
@@ -651,9 +784,20 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
     fileInput.click();
   });
 
-  // Button visibility helpers — defined after saveBtn/loadMaskBtn are in scope.
-  const _showSaveBtn = () => { saveBtn.style.display = ''; loadMaskBtn.style.display = 'none'; };
-  const _showLoadBtn = () => { saveBtn.style.display = 'none'; loadMaskBtn.style.display = ''; };
+  const linkOpenBtn = document.createElement('button');
+  linkOpenBtn.className = 'compact-btn';
+  linkOpenBtn.textContent = '⛓ Open Linked';
+  linkOpenBtn.title = 'Open this volume in a linked window (synced crosshair)';
+  linkOpenBtn.addEventListener('click', () => openLinkedWindow(metadata.id, { detailPanel, sidebar, toolPanel }));
+
+  const maskRow = document.createElement('div');
+  maskRow.style.cssText = 'display:flex;gap:4px;';
+  maskRow.appendChild(loadMaskBtn);
+  maskRow.appendChild(linkOpenBtn);
+
+  // Button visibility helpers — maskRow must be declared above this point.
+  const _showSaveBtn = () => { saveBtn.style.display = ''; maskRow.style.display = 'none'; };
+  const _showLoadBtn = () => { saveBtn.style.display = 'none'; maskRow.style.display = 'flex'; };
   if (_maskLoaded) {
     _showSaveBtn();
   } else {
@@ -747,7 +891,7 @@ function _setupToolPanel(toolPanel, state, metadata, sidebar, detailPanel) {
 
   saveBtn.addEventListener('click', showSaveModal);
   saveSec.appendChild(saveBtn);
-  saveSec.appendChild(loadMaskBtn);
+  saveSec.appendChild(maskRow);
   toolPanel.appendChild(saveSec);
 
   // Tool selection

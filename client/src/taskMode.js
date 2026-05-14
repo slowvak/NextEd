@@ -18,14 +18,15 @@
 
 export function getTaskParams() {
   const params = new URLSearchParams(window.location.search);
-  const volume = params.get('volume');
+  const volume = params.get('volume') || params.get('image');
   if (!volume) return null;
 
   return {
     volume,
     mask: params.get('mask'),
-    output: params.get('output'),
+    output: params.get('output') || params.get('segmentation'),
     callback: params.get('callback'),
+    returnUrl: params.get('return_url'),
     prompt: params.get('prompt'),
     mode: params.get('mode') || 'edit',
     taskId: params.get('task_id'),

@@ -97,7 +97,8 @@
       "Bash(lsof -iTCP:8060 -sTCP:LISTEN)",
       "Bash(awk '{print $1, $NF}')",
       "Bash(sed -n '24,40p' /Users/bje/repos/Sigma/client/src/viewer/windowLevel.js)",
-      "Bash(sed -n '131,145p' /Users/bje/repos/Sigma/client/src/viewer/ViewerState.js)"
+      "Bash(sed -n '131,145p' /Users/bje/repos/Sigma/client/src/viewer/ViewerState.js)",
+      "Bash(.venv/bin/python -c \"import server\")"
     ]
   }
 }

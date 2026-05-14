@@ -163,6 +163,22 @@ body {
   color: #a0a0a0;
 }
 
+.volume-link-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  opacity: 0.5;
+  line-height: 1;
+}
+
+.volume-link-btn:hover {
+  opacity: 1;
+  background: #4a4a4a;
+}
+
 .tool-panel {
   width: 240px;
   min-width: 240px;

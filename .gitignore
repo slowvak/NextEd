@@ -34,3 +34,4 @@ config.json
 
 # Misc project artifacts
 server/test.log
+.gitnexus
