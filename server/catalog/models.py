@@ -22,6 +22,7 @@ class VolumeMetadata(BaseModel):
     data_max: float | None = None
     study_instance_uid: str | None = None
     series_instance_uid: str | None = None
+    orientation_label: str | None = None
 
 
 class SegmentationMetadata(BaseModel):

@@ -82,6 +82,24 @@ async function init() {
       e.preventDefault();
       openHelpModal();
     }
+    if (e.ctrlKey && e.key === 'a') {
+      e.preventDefault();
+      const state = currentLayout?.state;
+      if (!state?.volume) return;
+      // Sample every 4th voxel, exclude zeros (background/fill)
+      const vol = state.volume;
+      const samples = [];
+      for (let i = 0; i < vol.length; i += 4) {
+        if (vol[i] !== 0) samples.push(vol[i]);
+      }
+      if (samples.length === 0) return;
+      samples.sort((a, b) => a - b);
+      const p05 = samples[Math.floor(samples.length * 0.05)];
+      const p98 = samples[Math.floor(samples.length * 0.98)];
+      state.windowCenter = (p05 + p98) / 2;
+      state.windowWidth = Math.max(p98 - p05, 1);
+      state.notify();
+    }
   });
 
   // Broadcast segmentation after every brush stroke.

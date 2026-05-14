@@ -98,7 +98,9 @@
       "Bash(awk '{print $1, $NF}')",
       "Bash(sed -n '24,40p' /Users/bje/repos/Sigma/client/src/viewer/windowLevel.js)",
       "Bash(sed -n '131,145p' /Users/bje/repos/Sigma/client/src/viewer/ViewerState.js)",
-      "Bash(.venv/bin/python -c \"import server\")"
+      "Bash(.venv/bin/python -c \"import server\")",
+      "Bash(.venv/bin/python -c \"from server.api.multivolume import router; print\\('multivolume router OK'\\)\")",
+      "Bash(server/.venv/bin/python *)"
     ]
   }
 }

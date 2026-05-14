@@ -278,6 +278,18 @@ def _discover_nifti_volumes(root: Path) -> list[dict]:
             if any(d < _MIN_DIM for d in dims):
                 continue
             spacing = [float(s) for s in canonical.header.get_zooms()[:3]]
+            x, y, z = spacing
+            max_sp = max(spacing)
+            eps = max_sp * 0.001
+            n_dominant = sum(1 for s in spacing if s >= max_sp - eps)
+            if n_dominant >= 2:
+                nifti_orientation = "Oblique"
+            elif z >= max_sp - eps:
+                nifti_orientation = "Axial"
+            elif y >= max_sp - eps:
+                nifti_orientation = "Coronal"
+            else:
+                nifti_orientation = "Sagittal"
             entries.append({
                 "name": nii.stem.replace(".nii", ""),
                 "path": str(nii),
@@ -286,6 +298,7 @@ def _discover_nifti_volumes(root: Path) -> list[dict]:
                 "voxel_spacing": spacing,
                 "dtype": "float32",
                 "modality": "unknown",
+                "orientation_label": nifti_orientation,
             })
         except Exception as e:
             print(f"  skipped {nii}: {e}")
@@ -308,6 +321,7 @@ def _discover_dicom_series(root: Path) -> list[dict]:
             "modality": s.get("modality", "unknown"),
             "study_instance_uid": s.get("study_uid"),
             "series_instance_uid": s.get("series_uid"),
+            "orientation_label": s.get("orientation_label"),
         })
     return entries
 
@@ -344,11 +358,13 @@ def _discover_all(paths: list[str]) -> list[dict]:
     return unique
 
 
+_CACHE_SCHEMA_VERSION = "v2"  # bump when VolumeMetadata fields are added
+
+
 def _compute_cache_key(entries: list[dict]) -> str:
     """Compute a hash of discovered entries for cache invalidation."""
-    # Use paths only — lightweight and changes when files are added/removed
     paths = sorted(e["path"] for e in entries)
-    content = json.dumps(paths)
+    content = _CACHE_SCHEMA_VERSION + json.dumps(paths)
     return hashlib.md5(content.encode()).hexdigest()
 
 
@@ -434,7 +450,7 @@ def _save_cache(cache_path: Path, key: str, catalog: list[VolumeMetadata],
         entry["_segmentations"] = [s.model_dump() for s in segs]
         volumes.append(entry)
 
-    cache = {"key": key, "volumes": volumes}
+    cache = {"schema": _CACHE_SCHEMA_VERSION, "key": key, "volumes": volumes}
     try:
         with open(cache_path, "w") as f:
             json.dump(cache, f, indent=2, default=str)
@@ -467,6 +483,7 @@ def _register_entries(entries: list[dict]) -> tuple[
                 modality=entry.get("modality", "unknown"),
                 study_instance_uid=entry.get("study_instance_uid"),
                 series_instance_uid=entry.get("series_instance_uid"),
+                orientation_label=entry.get("orientation_label"),
             )
 
             register_volume(vol_id, meta, entry["path"], entry["format"])
@@ -556,6 +573,8 @@ def _perform_scan(paths: list[str]) -> int:
         try:
             with open(cache_path) as f:
                 cache = json.load(f)
+            if cache.get("schema") != _CACHE_SCHEMA_VERSION:
+                raise ValueError("schema version mismatch")
             cached_volumes = cache.get("volumes", [])
             if cached_volumes:
                 t1 = time.time()

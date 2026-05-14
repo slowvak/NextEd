@@ -44,6 +44,25 @@ def _build_affine(
     return lps_to_ras @ affine_lps
 
 
+def orientation_from_iop(iop: list[float], pixel_spacing: list[float], z_spacing: float) -> str:
+    """Determine Axial/Coronal/Sagittal/Oblique using nibabel canonical affine.
+
+    Builds the DICOM geometry affine (LPS→RAS), canonicalises it to RAS+,
+    then identifies orientation from which canonical axis carries the slice spacing.
+    """
+    affine = _build_affine(iop, [0.0, 0.0, 0.0], pixel_spacing, [0.0, z_spacing], 2)
+    nii = nib.Nifti1Image(np.zeros((2, 2, 2), dtype=np.int8), affine)
+    canonical = nib.as_closest_canonical(nii)
+    zooms = [float(z) for z in canonical.header.get_zooms()[:3]]
+    max_z = max(zooms)
+    if max_z == 0:
+        return "Unknown"
+    eps = max_z * 0.001
+    if sum(1 for z in zooms if z >= max_z - eps) >= 2:
+        return "Oblique"
+    return ["Sagittal", "Coronal", "Axial"][zooms.index(max_z)]
+
+
 def discover_dicom_series(root: Path) -> list[dict]:
     """Scan a directory tree for DICOM files and group by SeriesInstanceUID.
 
@@ -154,7 +173,12 @@ def discover_dicom_series(root: Path) -> list[dict]:
                 z_spacing = float(np.median(gaps))
 
         info["dimensions"] = [cols, rows, n_slices]
-        info["voxel_spacing"] = info["voxel_spacing"] + [z_spacing]
+        pixel_spacing = info["voxel_spacing"]  # still [ps0, ps1] at this point
+        info["voxel_spacing"] = pixel_spacing + [z_spacing]
+        iop = info.get("orientation")
+        info["orientation_label"] = (
+            orientation_from_iop(iop, pixel_spacing, z_spacing) if iop else "Unknown"
+        )
         result.append(info)
 
     return result
