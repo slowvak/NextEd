@@ -164,6 +164,15 @@ body {
   color: #a0a0a0;
 }
 
+.volume-path {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
 .volume-link-btn {
   background: none;
   border: none;

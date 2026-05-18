@@ -47,6 +47,14 @@ function _buildVolumeItem(vol, onSelect) {
   dims.textContent = `${dx} × ${dy} × ${dz}`;
 
   li.appendChild(headerRow);
+
+  if (vol.relative_path) {
+    const pathSpan = document.createElement('span');
+    pathSpan.className = 'volume-path';
+    pathSpan.textContent = vol.relative_path;
+    li.appendChild(pathSpan);
+  }
+
   li.appendChild(dims);
 
   li.addEventListener('click', () => onSelect(vol));
