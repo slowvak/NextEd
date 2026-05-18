@@ -24,6 +24,7 @@ class VolumeMetadata(BaseModel):
     study_instance_uid: str | None = None
     series_instance_uid: str | None = None
     orientation_label: str | None = None
+    relative_path: str | None = None
 
 
 class SegmentationMetadata(BaseModel):

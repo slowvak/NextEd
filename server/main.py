@@ -261,7 +261,7 @@ async def debug_volume_paths(volume_id: str):
 #   For DICOM series: path = JSON-encoded list of file paths,
 #                     format = "dicom_series"
 
-def _discover_nifti_volumes(root: Path) -> list[dict]:
+def _discover_nifti_volumes(root: Path, scan_root: Path | None = None) -> list[dict]:
     """Find NIfTI volumes under root, read headers for metadata only (fast)."""
     import nibabel as nib
     entries = []
@@ -291,6 +291,13 @@ def _discover_nifti_volumes(root: Path) -> list[dict]:
                 nifti_orientation = "Coronal"
             else:
                 nifti_orientation = "Sagittal"
+            rel = ""
+            if scan_root:
+                try:
+                    rel_candidate = str(nii.parent.relative_to(scan_root))
+                    rel = "" if rel_candidate == "." else rel_candidate
+                except ValueError:
+                    rel = ""
             entries.append({
                 "name": nii.stem.replace(".nii", ""),
                 "path": str(nii),
@@ -300,19 +307,20 @@ def _discover_nifti_volumes(root: Path) -> list[dict]:
                 "dtype": "float32",
                 "modality": "unknown",
                 "orientation_label": nifti_orientation,
+                "relative_path": rel,
             })
         except Exception as e:
             print(f"  skipped {nii}: {e}")
     return entries
 
 
-def _discover_dicom_series(root: Path) -> list[dict]:
+def _discover_dicom_series(root: Path, scan_root: Path | None = None) -> list[dict]:
     """Find DICOM series under root, grouped by SeriesInstanceUID."""
     from server.loaders.dicom_loader import discover_dicom_series
     series_list = discover_dicom_series(root)
     entries = []
     for s in series_list:
-        entries.append({
+        entry = {
             "name": s["name"],
             "path": json.dumps(s["files"]),  # Store file list as JSON string
             "format": "dicom_series",
@@ -323,7 +331,17 @@ def _discover_dicom_series(root: Path) -> list[dict]:
             "study_instance_uid": s.get("study_uid"),
             "series_instance_uid": s.get("series_uid"),
             "orientation_label": s.get("orientation_label"),
-        })
+        }
+        rel = ""
+        if scan_root:
+            try:
+                first_file = Path(json.loads(s["files"])[0])
+                rel_candidate = str(first_file.parent.relative_to(scan_root))
+                rel = "" if rel_candidate == "." else rel_candidate
+            except (ValueError, IndexError, json.JSONDecodeError):
+                rel = ""
+        entry["relative_path"] = rel
+        entries.append(entry)
     return entries
 
 
@@ -342,13 +360,15 @@ def _discover_all(paths: list[str]) -> list[dict]:
             continue
 
         if path.is_file():
+            scan_root = path.parent
             if path.suffix in (".gz", ".nii"):
-                entries.extend(_discover_nifti_volumes(path.parent))
+                entries.extend(_discover_nifti_volumes(path.parent, scan_root=scan_root))
             elif path.suffix.lower() in (".dcm", ".ima"):
-                entries.extend(_discover_dicom_series(path.parent))
+                entries.extend(_discover_dicom_series(path.parent, scan_root=scan_root))
         elif path.is_dir():
-            entries.extend(_discover_nifti_volumes(path))
-            entries.extend(_discover_dicom_series(path))
+            scan_root = path
+            entries.extend(_discover_nifti_volumes(path, scan_root=scan_root))
+            entries.extend(_discover_dicom_series(path, scan_root=scan_root))
 
     # Deduplicate by path
     unique = []
@@ -359,7 +379,7 @@ def _discover_all(paths: list[str]) -> list[dict]:
     return unique
 
 
-_CACHE_SCHEMA_VERSION = "v2"  # bump when VolumeMetadata fields are added
+_CACHE_SCHEMA_VERSION = "v3"  # bump when VolumeMetadata fields are added
 
 
 def _compute_cache_key(entries: list[dict]) -> str:
@@ -485,6 +505,7 @@ def _register_entries(entries: list[dict]) -> tuple[
                 study_instance_uid=entry.get("study_instance_uid"),
                 series_instance_uid=entry.get("series_instance_uid"),
                 orientation_label=entry.get("orientation_label"),
+                relative_path=entry.get("relative_path"),
             )
 
             register_volume(vol_id, meta, entry["path"], entry["format"])
