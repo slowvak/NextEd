@@ -68,6 +68,7 @@ None yet.
 | 260504-eao | Add Grow3D tool to dropdown below Grow2D: 6-connected 3D region grow with same label/min-max rules as Grow2D | 2026-05-04 | f4a7d15 | [260504-eao-add-grow3d-tool-to-dropdown-below-grow2d](./quick/260504-eao-add-grow3d-tool-to-dropdown-below-grow2d/) |
 | 260504-m9e | Add slice-range dialog before AI inference; start_slice/end_slice forwarded to AI server | 2026-05-04 | 4c6f079 | [260504-m9e-ai-tool-slice-range-dialog](./quick/260504-m9e-ai-tool-slice-range-dialog/) |
 | 260518-c3r | Add relative path display to volume list sidebar; VolumeMetadata.relative_path populated by NIfTI and DICOM discovery | 2026-05-18 | a56617b | [260518-c3r-add-relative-path-display-to-volume-list](./quick/260518-c3r-add-relative-path-display-to-volume-list/) |
+| 260518-c7w | Add series date and time display to the DICOM volume detail panel | 2026-05-18 | d0b1e26 | [260518-c7w-add-series-date-and-time-display-to-the-](./quick/260518-c7w-add-series-date-and-time-display-to-the-/) |
 
 ### Blockers/Concerns
 
@@ -77,7 +78,7 @@ None yet.
 
 ## Session Continuity
 
-Last activity: 2026-05-18 - Completed quick task 260518-c3r: Add relative path display to volume list
+Last activity: 2026-05-18 - Completed quick task 260518-c7w: Add series date and time display to DICOM detail panel
 Last session: 2026-05-18T13:51:36.517Z
 Stopped at: Completed quick task 260518-c7w
 Resume file: None
