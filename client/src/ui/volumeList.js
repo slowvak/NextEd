@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /** @type {function(string): void} - set by main.js to open a volume in a linked window */
 let _openLinkedWindow = null;
 export function setOpenLinkedWindowCallback(fn) { _openLinkedWindow = fn; }

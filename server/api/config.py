@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 from fastapi import APIRouter, HTTPException, Request
 import json
 import asyncio

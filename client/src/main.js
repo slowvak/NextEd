@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 import './styles.css';
 import { showSplashIfNeeded } from './ui/splashScreen.js';
 import { createAppShell } from './ui/appShell.js';

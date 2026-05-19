@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """SIGMA server — FastAPI application entry point.
 
 Usage:

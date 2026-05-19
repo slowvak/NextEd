@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for DICOM-SEG writer: label remapping, dataset sorting, frame conversion."""
 
 from __future__ import annotations

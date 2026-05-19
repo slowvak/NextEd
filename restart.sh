@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright Bradley J Erickson, 2026.
 # restart.sh — Stop running SIGMA components and restart them.
 
 set -euo pipefail

@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for WADO-RS endpoints (WADO-01, WADO-02).
 
 WADO-01: Series retrieve returns multipart/related with DICOM file bytes.

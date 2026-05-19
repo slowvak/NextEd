@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for segmentation discovery logic."""
 
 import pytest

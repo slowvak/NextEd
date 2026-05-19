@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Task mode API — supports external workflow integration.
 
 Allows loading volumes and segmentations by filesystem path (rather than

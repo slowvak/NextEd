@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * ViewerPanel — renders a single plane (axial, coronal, or sagittal)
  * with canvas, orientation labels, slice slider, crosshairs, and label bar.

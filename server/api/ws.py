@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """WebSocket endpoint and ConnectionManager for real-time event broadcast."""
 
 from __future__ import annotations

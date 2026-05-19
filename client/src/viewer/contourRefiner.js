@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * Contour Refiner — snaps a segmentation label boundary to image edges.
  *

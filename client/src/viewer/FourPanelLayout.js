@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * FourPanelLayout — CSS Grid 2x2 layout with axial (UL), coronal (UR),
  * sagittal (LL), blank (LR) panels. Supports single-view toggle.

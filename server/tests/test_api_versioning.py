@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for API versioning (API-01): all endpoints under /api/v1/."""
 import pytest
 from fastapi.testclient import TestClient

@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 const WS_URL = `ws://${location.host}/api/v1/ws`;
 const MAX_DELAY = 30000;
 let ws = null;

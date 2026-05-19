@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 export function renderVolumeDetail(volume, container, onOpen) {
   container.innerHTML = '';
 

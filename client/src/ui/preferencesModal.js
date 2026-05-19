@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 export async function openPreferencesModal() {
   // Fetch current config
   let configData;

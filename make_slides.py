@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Generate SIGMA How-To PowerPoint."""
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu

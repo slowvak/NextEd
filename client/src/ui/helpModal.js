@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 export function openHelpModal() {
   const overlay = document.createElement('div');
   overlay.style.position = 'fixed';

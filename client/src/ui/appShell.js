@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 export function createAppShell() {
   const header = document.createElement('header');
   header.className = 'app-header';

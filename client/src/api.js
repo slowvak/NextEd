@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 const API_BASE = '/api/v1';
 
 export async function fetchVolumes() {

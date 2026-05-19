@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """DICOM volume loader with series grouping, RAS+ normalization, and auto-windowing."""
 
 from __future__ import annotations

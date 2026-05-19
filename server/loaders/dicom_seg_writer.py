@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """DICOM-SEG writer: constructs DICOM-SEG from RAS+ segmentation arrays.
 
 Handles label remapping, RAS-to-LPS orientation reversal, and highdicom

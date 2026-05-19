@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """AI model execution API — proxy inference to a single AI server."""
 
 from __future__ import annotations

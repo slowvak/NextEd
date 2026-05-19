@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for RAS+ canonical orientation normalization."""
 
 from __future__ import annotations

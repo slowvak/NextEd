@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Segmentation API endpoints for metadata and binary data serving."""
 
 from __future__ import annotations

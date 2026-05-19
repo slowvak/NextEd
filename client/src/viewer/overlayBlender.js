@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 export function buildColorLUT(labels) {
   const lut = new Uint8Array(256 * 3);
   for (const [value, label] of labels) {

@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * Oblique slice extraction from a flat 3D volume in C-order (RAS+).
  *

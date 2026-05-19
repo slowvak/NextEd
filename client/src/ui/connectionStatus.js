@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 let statusEl = null;
 
 export function createConnectionStatus(parentEl) {

@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 const SEEN_KEY = 'sigma_splash_seen';
 
 /**

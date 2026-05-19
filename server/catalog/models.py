@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Data models for volume catalog entries."""
 
 from __future__ import annotations

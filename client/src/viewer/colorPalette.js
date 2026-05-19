@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 export const DEFAULT_LABEL_COLORS = [
   { r: 255, g: 0,   b: 0   },  // 1: Red
   { r: 0,   g: 255, b: 0   },  // 2: Green

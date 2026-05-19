@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 export let appConfig = {
   window_level_presets: {
     Brain: { center: 40, width: 80 },

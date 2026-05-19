@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * showFolderPickerModal — Displayed on startup when no source_directory is set.
  *

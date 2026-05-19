@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 export default {
   server: {
     port: 5275,

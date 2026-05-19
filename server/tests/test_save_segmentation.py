@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for format-aware save_segmentation endpoint.
 
 Verifies that:

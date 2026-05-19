@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright Bradley J Erickson, 2026.
 set -e
 
 # Patch config.json so sigma-server talks to the AI container by its service name.

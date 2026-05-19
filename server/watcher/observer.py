@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Filesystem observer — watches directories for volume file changes.
 
 Uses watchdog to monitor directories and bridges events into asyncio

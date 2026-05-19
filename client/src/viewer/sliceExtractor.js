@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * Slice extraction from a flat 3D Float32Array volume in C-order (RAS+).
  *

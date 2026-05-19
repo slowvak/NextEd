@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 import { describe, it, expect } from 'vitest';
 import { computeWLDrag } from '../viewer/windowLevel.js';
 

@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for WebSocket ConnectionManager and endpoint."""
 
 from __future__ import annotations

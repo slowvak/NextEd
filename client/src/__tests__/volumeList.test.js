@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest';
 import { addVolumeToList, removeVolumeFromList } from '../ui/volumeList.js';

@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * presetBar — W/L preset buttons for CT volumes.
  * Hidden for known non-CT DICOM modalities (MR, PT, etc.).

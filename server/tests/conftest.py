@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Shared test fixtures for server tests."""
 
 from __future__ import annotations

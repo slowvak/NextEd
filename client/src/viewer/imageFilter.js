@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * imageFilter.js — Smoothing filters applied to raw image intensity data.
  *

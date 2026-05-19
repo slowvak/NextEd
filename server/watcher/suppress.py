@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Thread-safe suppress list for the file watcher.
 
 Prevents the watcher from re-detecting files that the server itself

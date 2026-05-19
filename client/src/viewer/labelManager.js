@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 import { appConfig } from '../configStore.js';
 import { getColorForLabel, hexToRgb } from './colorPalette.js';
 

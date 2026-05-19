@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for DICOM UID fields (API-02, API-03)."""
 import pytest
 from server.catalog.models import VolumeMetadata

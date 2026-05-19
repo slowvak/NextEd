@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * Task Mode — external workflow integration for NextEd viewer.
  *

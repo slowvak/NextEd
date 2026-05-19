@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for WatcherSuppressList: TTL expiry, thread safety, add/remove."""
 
 from __future__ import annotations

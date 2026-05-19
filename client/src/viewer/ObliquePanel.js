@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * ObliquePanel — renders an oblique (tilted) slice in the lower-right quadrant.
  * Starts as a copy of the axial view. The user tilts it via rotation handles

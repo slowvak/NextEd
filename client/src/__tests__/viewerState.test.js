@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 import { describe, it, expect, vi } from 'vitest';
 import { ViewerState } from '../viewer/ViewerState.js';
 

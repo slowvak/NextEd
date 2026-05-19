@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright Bradley J Erickson, 2026.
 # start.sh — Kill any existing SIGMA processes and restart everything.
 #
 # Components:

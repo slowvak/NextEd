@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """DICOM series debouncer — coalesces rapid file events per directory."""
 
 from __future__ import annotations

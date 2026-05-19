@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 /**
  * Window/level rendering for Float32Array medical image data.
  *

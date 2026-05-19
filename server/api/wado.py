@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """DICOMweb WADO-RS endpoints for series-level retrieval and metadata.
 
 Implements:

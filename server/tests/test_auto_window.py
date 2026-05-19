@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for auto-windowing percentile computation."""
 
 from __future__ import annotations

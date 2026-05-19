@@ -1,3 +1,4 @@
+# Copyright Bradley J Erickson, 2026.
 """Tests for VolumeEventHandler and watcher observer."""
 
 from __future__ import annotations

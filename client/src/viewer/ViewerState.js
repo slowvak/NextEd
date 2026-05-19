@@ -1,3 +1,4 @@
+// Copyright Bradley J Erickson, 2026.
 import { discoverLabels, findLowestUnusedValue, reassignLabelValue } from './labelManager.js';
 import { buildColorLUT } from './overlayBlender.js';
 
