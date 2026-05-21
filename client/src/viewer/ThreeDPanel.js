@@ -248,10 +248,27 @@ export class ThreeDPanel {
   }
 
   _onStateChange() {
-    // Rebuild surfaces when seg changes (surface mode only)
-    if (this._mode === 'surface' && this.state.segVolume &&
-        this.state.segVersion !== this._lastSegVersion) {
+    if (this._mode !== 'surface' || !this.state.segVolume) return;
+    if (this.state.segVersion !== this._lastSegVersion) {
       this._requestMeshRebuild();
+    } else {
+      this._syncMeshVisibility();
+    }
+  }
+
+  // Toggle visibility on already-built meshes. If a newly-visible label has no
+  // mesh (was hidden when meshes were last built), kick off a full rebuild.
+  _syncMeshVisibility() {
+    for (const [val, mesh] of this._meshes) {
+      const label = this.state.labels.get(val);
+      mesh.visible = label ? label.isVisible !== false : false;
+    }
+    for (const [val, label] of this.state.labels) {
+      if (val === 0) continue;
+      if (label.isVisible !== false && !this._meshes.has(val)) {
+        this._requestMeshRebuild();
+        return;
+      }
     }
   }
 
