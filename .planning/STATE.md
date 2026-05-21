@@ -69,6 +69,7 @@ None yet.
 | 260504-m9e | Add slice-range dialog before AI inference; start_slice/end_slice forwarded to AI server | 2026-05-04 | 4c6f079 | [260504-m9e-ai-tool-slice-range-dialog](./quick/260504-m9e-ai-tool-slice-range-dialog/) |
 | 260518-c3r | Add relative path display to volume list sidebar; VolumeMetadata.relative_path populated by NIfTI and DICOM discovery | 2026-05-18 | a56617b | [260518-c3r-add-relative-path-display-to-volume-list](./quick/260518-c3r-add-relative-path-display-to-volume-list/) |
 | 260518-c7w | Add series date and time display to the DICOM volume detail panel | 2026-05-18 | d0b1e26 | [260518-c7w-add-series-date-and-time-display-to-the-](./quick/260518-c7w-add-series-date-and-time-display-to-the-/) |
+| 260521-h1m | 3D view panel with marching cubes surface rendering (Web Worker) and ray-cast volume fog; Oblique/3D toggle in lower-right quadrant | 2026-05-21 | d078d38 | [260521-h1m-implement-3d-view-panel-with-surface-and](./quick/260521-h1m-implement-3d-view-panel-with-surface-and/) |
 
 ### Blockers/Concerns
 
@@ -78,7 +79,7 @@ None yet.
 
 ## Session Continuity
 
-Last activity: 2026-05-18 - Completed quick task 260518-c7w: Add series date and time display to DICOM detail panel
-Last session: 2026-05-18T13:51:36.517Z
-Stopped at: Completed quick task 260518-c7w
+Last activity: 2026-05-21 - Completed quick task 260521-h1m: 3D view panel with marching cubes and volume rendering
+Last session: 2026-05-21T17:29:27Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
