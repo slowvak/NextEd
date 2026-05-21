@@ -221,6 +221,8 @@ export class ThreeDPanel {
 
     if (this._mode === 'volume') {
       this._buildVolumeRender();
+    } else if (this.state.segVolume) {
+      this._requestMeshRebuild();
     }
   }
 
@@ -307,8 +309,8 @@ export class ThreeDPanel {
 
     this._worker.postMessage({
       segVolume: segCopy,
-      dims: this.state.dims,
-      spacing: this.state.spacing || [1, 1, 1],
+      dims: this._dims || this.state.dims,
+      spacing: this._spacing || this.state.spacing || [1, 1, 1],
       labels,
     }, [segCopy.buffer]);
 
