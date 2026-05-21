@@ -335,7 +335,7 @@ def _discover_dicom_series(root: Path, scan_root: Path | None = None) -> list[di
         rel = ""
         if scan_root:
             try:
-                first_file = Path(json.loads(s["files"])[0])
+                first_file = Path(s["files"][0])
                 rel_candidate = str(first_file.parent.relative_to(scan_root))
                 rel = "" if rel_candidate == "." else rel_candidate
             except (ValueError, IndexError, json.JSONDecodeError):
