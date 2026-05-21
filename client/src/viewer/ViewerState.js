@@ -251,6 +251,27 @@ export class ViewerState {
     }
   }
 
+  hideEmptyLabels() {
+    if (!this.segVolume) return;
+    const counts = new Map();
+    for (let i = 0; i < this.segVolume.length; i++) {
+      const v = this.segVolume[i];
+      if (v !== 0) counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    let changed = false;
+    for (const [val, label] of this.labels) {
+      if (val === 0) continue;
+      if (!counts.has(val) && label.isVisible !== false) {
+        label.isVisible = false;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.colorLUT = buildColorLUT(this.labels);
+      this.notify();
+    }
+  }
+
   setActiveLabel(value) {
     this.activeLabel = value;
     const label = this.labels.get(value);
