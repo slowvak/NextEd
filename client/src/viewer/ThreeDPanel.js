@@ -9,7 +9,6 @@
  *   updateDisplaySize, _updateCursor, toggleBtn
  */
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export class ThreeDPanel {
   constructor({ container, state }) {
@@ -25,11 +24,9 @@ export class ThreeDPanel {
     this._volTexture = null;
     this._volThreshMin = 0.1;  // normalized [0,1]
     this._volThreshMax = 0.9;
-    this._isDraggingThresh = false;
-    this._threshDragStartX = 0;
-    this._threshDragStartY = 0;
-    this._threshStartMin = 0.1;
-    this._threshStartMax = 0.9;
+    this._dragMode = null;     // 'orbit' | 'pan' | 'zoomroll' | null
+    this._lastMouseX = 0;
+    this._lastMouseY = 0;
 
     this._buildDOM();
     this._initThree();
@@ -72,6 +69,10 @@ export class ThreeDPanel {
     this.rendererDiv.style.cssText = 'position:relative;width:100%;flex:1;overflow:hidden;min-height:0;';
     this.container.appendChild(this.rendererDiv);
 
+    this._progressDiv = document.createElement('div');
+    this._progressDiv.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.65);color:#ddd;padding:6px 16px;border-radius:4px;font-size:12px;pointer-events:none;display:none;z-index:10;white-space:nowrap;';
+    this.rendererDiv.appendChild(this._progressDiv);
+
     // ThreeDPanel container needs flex layout for rendererDiv to grow
     this.container.style.display = 'flex';
     this.container.style.flexDirection = 'column';
@@ -89,10 +90,8 @@ export class ThreeDPanel {
     // Camera positioned at +Z looking toward origin
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
     this.camera.position.set(0, 0, 400);
-
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.1;
+    this.camera.up.set(0, 1, 0);
+    this._target = new THREE.Vector3(0, 0, 0);
 
     // Lighting for surface mode
     const ambient = new THREE.AmbientLight(0xffffff, 0.4);
@@ -107,45 +106,103 @@ export class ThreeDPanel {
 
     this._animate();
 
-    // Ctrl-LMB threshold drag (volume mode)
+    // Mouse interaction:
+    //   LMB drag           → orbit (screen-space X/Y axes)
+    //   Ctrl/Meta-LMB drag → pan (screen-space translation)
+    //   Shift-LMB drag     → left/right = zoom, up/down = roll (screen-space Z)
+    //   Scroll wheel       → zoom
+    this.renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
     this.renderer.domElement.addEventListener('mousedown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.button === 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        this._isDraggingThresh = true;
-        this._threshDragStartX = e.clientX;
-        this._threshDragStartY = e.clientY;
-        this._threshStartMin = this._volThreshMin;
-        this._threshStartMax = this._volThreshMax;
-        this.controls.enabled = false;
+      if (e.button !== 0) return;
+      e.preventDefault();
+      this._lastMouseX = e.clientX;
+      this._lastMouseY = e.clientY;
+      if (e.ctrlKey || e.metaKey) {
+        this._dragMode = 'pan';
+      } else if (e.shiftKey) {
+        this._dragMode = 'zoomroll';
+      } else {
+        this._dragMode = 'orbit';
       }
     });
 
     this._onMouseMove = (e) => {
-      if (!this._isDraggingThresh) return;
-      // Horizontal drag → shift minThreshold (window center analog)
-      // Vertical drag → shift maxThreshold
-      const dx = (e.clientX - this._threshDragStartX) / 300;
-      const dy = (e.clientY - this._threshDragStartY) / 300;
-      this._volThreshMin = Math.max(0, Math.min(0.99, this._threshStartMin + dx));
-      this._volThreshMax = Math.max(this._volThreshMin + 0.01, Math.min(1, this._threshStartMax - dy));
-      this._updateVolumeUniforms();
+      if (!this._dragMode) return;
+      const dx = e.clientX - this._lastMouseX;
+      const dy = e.clientY - this._lastMouseY;
+      this._lastMouseX = e.clientX;
+      this._lastMouseY = e.clientY;
+      if (this._dragMode === 'orbit')    this._rotateScreenXY(dx, dy);
+      else if (this._dragMode === 'pan') this._pan(dx, dy);
+      else                               this._zoomAndRoll(dx, dy);
     };
 
-    this._onMouseUp = () => {
-      if (this._isDraggingThresh) {
-        this._isDraggingThresh = false;
-        this.controls.enabled = true;
-      }
-    };
+    this._onMouseUp = () => { this._dragMode = null; };
 
     document.addEventListener('mousemove', this._onMouseMove);
     document.addEventListener('mouseup', this._onMouseUp);
+
+    this.renderer.domElement.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const offset = this.camera.position.clone().sub(this._target);
+      offset.multiplyScalar(e.deltaY > 0 ? 1.1 : 0.9);
+      this.camera.position.copy(this._target).add(offset);
+    }, { passive: false });
+  }
+
+  // Rotate around screen-space X and Y axes (trackball orbit).
+  _rotateScreenXY(dx, dy) {
+    const offset = this.camera.position.clone().sub(this._target);
+    const up = this.camera.up.clone().normalize();
+
+    // Yaw around screen Y (camera up)
+    const qY = new THREE.Quaternion().setFromAxisAngle(up, -dx * 0.005);
+    offset.applyQuaternion(qY);
+    this.camera.up.applyQuaternion(qY);
+
+    // Pitch around screen X (right vector after yaw)
+    const fwd = offset.clone().normalize().negate();
+    const right = new THREE.Vector3().crossVectors(fwd, this.camera.up).normalize();
+    const qX = new THREE.Quaternion().setFromAxisAngle(right, -dy * 0.005);
+    offset.applyQuaternion(qX);
+    this.camera.up.applyQuaternion(qX);
+
+    this.camera.position.copy(this._target).add(offset);
+    this.camera.lookAt(this._target);
+  }
+
+  // Translate camera and target together along screen-space X/Y.
+  _pan(dx, dy) {
+    const offset = this.camera.position.clone().sub(this._target);
+    const dist = offset.length();
+    const fwd = offset.clone().normalize().negate();
+    const right = new THREE.Vector3().crossVectors(fwd, this.camera.up).normalize();
+    const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+    const speed = dist * 0.001;
+    const delta = right.multiplyScalar(-dx * speed).add(up.multiplyScalar(dy * speed));
+    this.camera.position.add(delta);
+    this._target.add(delta);
+    this.camera.lookAt(this._target);
+  }
+
+  // Shift-LMB: left/right = zoom, up/down = roll around screen Z.
+  _zoomAndRoll(dx, dy) {
+    const offset = this.camera.position.clone().sub(this._target);
+    // Zoom: right = closer, left = farther
+    offset.multiplyScalar(Math.pow(0.998, dx));
+    // Roll: rotate camera.up around outward axis
+    if (dy !== 0) {
+      const axisOut = offset.clone().normalize();
+      const qRoll = new THREE.Quaternion().setFromAxisAngle(axisOut, dy * 0.005);
+      this.camera.up.applyQuaternion(qRoll);
+    }
+    this.camera.position.copy(this._target).add(offset);
+    this.camera.lookAt(this._target);
   }
 
   _animate() {
     this._animId = requestAnimationFrame(() => this._animate());
-    this.controls.update();
     const w = this.rendererDiv.clientWidth || 1;
     const h = this.rendererDiv.clientHeight || 1;
     if (this.camera.aspect !== w / h) {
@@ -214,15 +271,35 @@ export class ThreeDPanel {
     const [dx, dy, dz] = dims;
     const [sx, sy, sz] = spacing;
     const cx = (dx * sx) / 2, cy = (dy * sy) / 2, cz = (dz * sz) / 2;
-    this.controls.target.set(cx, cy, cz);
+    this._target.set(cx, cy, cz);
     const maxDim = Math.max(dx * sx, dy * sy, dz * sz);
     this.camera.position.set(cx, cy, cz + maxDim * 1.5);
-    this.controls.update();
+    this.camera.lookAt(this._target);
 
     if (this._mode === 'volume') {
       this._buildVolumeRender();
     } else if (this.state.segVolume) {
+      this._autoHideEmptyLabels();
       this._requestMeshRebuild();
+    }
+  }
+
+  // If >20% of labels have no painted voxels, hide them all before the first render.
+  _autoHideEmptyLabels() {
+    if (!this.state.segVolume || !this.state.labels) return;
+    const counts = new Map();
+    for (let i = 0; i < this.state.segVolume.length; i++) {
+      const v = this.state.segVolume[i];
+      if (v !== 0) counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    let total = 0, empty = 0;
+    for (const [val] of this.state.labels) {
+      if (val === 0) continue;
+      total++;
+      if (!counts.has(val)) empty++;
+    }
+    if (total > 0 && empty / total > 0.2) {
+      this.state.hideEmptyLabels();
     }
   }
 
@@ -258,7 +335,6 @@ export class ThreeDPanel {
     }
     if (this._volTexture) this._volTexture.dispose();
 
-    this.controls.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement.parentNode) {
       this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
@@ -299,6 +375,11 @@ export class ThreeDPanel {
       return;
     }
 
+    this._progressCount = 0;
+    this._progressTotal = labels.length;
+    this._progressDiv.textContent = `Preparing 0/${labels.length}...`;
+    this._progressDiv.style.display = 'block';
+
     // Transfer a copy of segVolume (transferable buffer)
     const segCopy = this.state.segVolume.slice();
 
@@ -317,12 +398,15 @@ export class ThreeDPanel {
     this._worker.onmessage = (e) => {
       const data = e.data;
       if (data.done) {
+        this._progressDiv.style.display = 'none';
         this._pendingWorkerResult = false;
         this._worker = null;
         return;
       }
 
       const { label: labelVal, vertices, normals } = data;
+      this._progressCount++;
+      this._progressDiv.textContent = `Preparing ${this._progressCount}/${this._progressTotal}...`;
       if (!vertices || vertices.length === 0) return;
 
       const labelInfo = this.state.labels.get(labelVal);
