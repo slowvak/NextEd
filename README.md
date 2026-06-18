@@ -6,11 +6,13 @@
 
 ## Features
 
-- **Folder-based catalog** — point ΣIGMA at a folder and it discovers all volumes automatically (each volume typically maps to a CT or MRI series)
-- **4-panel viewer** — Axial, Coronal, Sagittal, and Oblique views rendered side-by-side
+- **Folder-based catalog** — point ΣIGMA at a folder and it discovers all volumes automatically (each volume typically maps to a CT or MRI series); relative path and DICOM series date/time are shown alongside each entry
+- **4-panel viewer** — Axial, Coronal, Sagittal, and 3D views rendered side-by-side; the lower-right panel toggles between Oblique and 3D with the `3D`/`Obl` button
+- **3D view** — marching cubes surface rendering (per segmentation label, via Web Worker) and ray-cast volume fog; switch modes with the `Vol`/`Surf` button; Ctrl-drag to adjust threshold range independently of the 2D window/level
 - **Single-panel mode** — click `A`, `C`, or `S` in the corner of any panel to expand it; press `4` to return to the 4-panel layout
 - **Synchronized crosshairs** — scroll the mouse wheel to move through slices; crosshairs update across all panels
 - **Segmentation editing** — paint, erase, and label segmentation masks directly in the browser
+- **Label management** — toggle per-label visibility (synced to the 3D view), hide labels with no data using **Hide Empty**, and assign colors per label
 - **Built-in help** — click `?` in the toolbar for a full tool reference
 
 ---
