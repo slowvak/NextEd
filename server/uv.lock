@@ -724,13 +724,15 @@ dependencies = [
     { name = "python-multipart" },
     { name = "scikit-image" },
     { name = "scipy" },
-    { name = "simpleitk" },
     { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
 dev = [
     { name = "pytest" },
+]
+registration = [
+    { name = "simpleitk" },
 ]
 
 [package.metadata]
@@ -745,10 +747,10 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "scikit-image", specifier = ">=0.22" },
     { name = "scipy", specifier = ">=1.12" },
-    { name = "simpleitk", specifier = ">=2.3" },
+    { name = "simpleitk", marker = "extra == 'registration'", specifier = ">=2.3" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "registration"]
 
 [[package]]
 name = "simpleitk"
