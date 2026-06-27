@@ -18,10 +18,113 @@ import { showFolderPickerModal } from './ui/folderPickerModal.js';
 import { getTaskParams, loadVolumeByPath, loadMaskByPath, completeTask, buildTaskUI } from './taskMode.js';
 import { SyncBridge } from './multivolume/SyncBridge.js';
 import { showDimMismatchModal } from './multivolume/DimMismatchModal.js';
+import { uploadVolumes } from './api.js';
 
 let currentVolume = null;
 let currentLayout = null;
 let currentSyncBridge = null;
+
+// Drag-and-drop: prevent browser navigation immediately (before init() awaits complete).
+// Files dropped before the app is ready are queued and drained when _initDragDrop is called.
+const _ddQueue = [];
+let _ddHandler = null; // set by _initDragDrop
+
+window.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  _collectDroppedFiles(e.dataTransfer).then(files => {
+    if (!files.length) return;
+    if (_ddHandler) { _ddHandler(files); } else { _ddQueue.push(...files); }
+  });
+});
+
+// Recurse into dropped folders via webkitGetAsEntry so a dropped DICOM folder
+// sends all its files (not just an empty FileList).
+async function _collectDroppedFiles(dataTransfer) {
+  const items = [...(dataTransfer.items || [])];
+  if (!items.length) return [...dataTransfer.files];
+
+  const files = [];
+  async function readEntry(entry) {
+    if (entry.isFile) {
+      files.push(await new Promise(res => entry.file(res)));
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      // createReader returns up to 100 entries per call; loop until done
+      let batch;
+      do {
+        batch = await new Promise(res => reader.readEntries(res));
+        for (const child of batch) await readEntry(child);
+      } while (batch.length > 0);
+    }
+  }
+
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) await readEntry(entry);
+    else if (item.kind === 'file') files.push(item.getAsFile());
+  }
+  return files;
+}
+
+function _initDragDrop(listContainer, selectHandler, openVolumeFn) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:9000',
+    'display:none', 'align-items:center', 'justify-content:center',
+    'background:rgba(10,12,20,0.82)', 'backdrop-filter:blur(4px)',
+    'pointer-events:none',
+  ].join(';');
+  const label = document.createElement('div');
+  label.style.cssText = [
+    'color:#a0b8ff', 'font-size:1.4rem', 'font-weight:600',
+    'border:2px dashed rgba(99,130,255,0.6)', 'border-radius:16px',
+    'padding:2rem 3rem',
+  ].join(';');
+  label.textContent = 'Drop NIfTI or DICOM files to load';
+  overlay.appendChild(label);
+  document.body.appendChild(overlay);
+
+  let dragDepth = 0;
+  window.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragDepth++;
+    overlay.style.display = 'flex';
+  });
+  window.addEventListener('dragleave', () => {
+    dragDepth--;
+    if (dragDepth <= 0) { dragDepth = 0; overlay.style.display = 'none'; }
+  });
+
+  function hideOverlay() {
+    dragDepth = 0;
+    overlay.style.display = 'none';
+    label.textContent = 'Drop NIfTI or DICOM files to load';
+  }
+
+  async function handleFiles(files) {
+    dragDepth = 0;
+    label.textContent = 'Loading…';
+    overlay.style.display = 'flex';
+    try {
+      const volumes = await uploadVolumes(files);
+      hideOverlay();
+      for (const vol of volumes) addVolumeToList(vol, listContainer, selectHandler);
+      if (volumes.length >= 1) { selectHandler(volumes[0]); openVolumeFn(volumes[0]); }
+      if (!volumes.length) { label.textContent = 'No volumes found in dropped files.'; overlay.style.display = 'flex'; setTimeout(hideOverlay, 2000); }
+    } catch (err) {
+      console.error('[drag-drop] upload failed:', err);
+      label.textContent = `Error: ${err.message}`;
+      overlay.style.display = 'flex';
+      setTimeout(hideOverlay, 2000);
+    }
+  }
+
+  _ddHandler = handleFiles;
+  // Drain any files dropped before the app was ready
+  if (_ddQueue.length) { handleFiles(_ddQueue.splice(0)); }
+}
 
 async function init() {
   await showSplashIfNeeded();
@@ -158,6 +261,9 @@ async function init() {
       }
     }
   });
+
+  // Drag-and-drop volume loading
+  _initDragDrop(listContainer, selectHandler, (vol) => openVolume(vol, { detailPanel, sidebar, toolPanel }));
 
   // Connection status indicator
   createConnectionStatus(sidebar);

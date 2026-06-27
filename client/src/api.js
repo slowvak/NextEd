@@ -1,6 +1,14 @@
 // Copyright Bradley J Erickson, 2026.
 const API_BASE = '/api/v1';
 
+export async function uploadVolumes(files) {
+  const form = new FormData();
+  for (const f of files) form.append('files', f, f.name);
+  const response = await fetch(`${API_BASE}/volumes/upload`, { method: 'POST', body: form });
+  if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+  return response.json();
+}
+
 export async function fetchVolumes() {
   const response = await fetch(`${API_BASE}/volumes`);
   if (!response.ok) throw new Error(`Failed to fetch volumes: ${response.status}`);

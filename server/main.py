@@ -22,7 +22,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.api.volumes import router as volumes_router, register_volume
@@ -198,6 +198,87 @@ async def trigger_rescan():
     app.state._watch_paths = watch_paths
 
     return {"status": "success", "volumes_found": count}
+
+
+def _dicom_series_uid(path: Path):
+    """Return SeriesInstanceUID from a DICOM file header, or None."""
+    try:
+        import pydicom
+        ds = pydicom.dcmread(str(path), stop_before_pixels=True)
+        uid = str(getattr(ds, "SeriesInstanceUID", "")).strip()
+        return uid or None
+    except Exception:
+        return None
+
+
+def _find_series_dir_by_filename(filename: str):
+    """Find a file by name under any known scan path, return its parent folder."""
+    from server.api.config import get_config_data
+    candidates = list(getattr(app.state, '_scan_paths', []))
+    src = get_config_data().get("source_directory", "")
+    if src:
+        candidates.append(src)
+    for base in candidates:
+        root = Path(base).expanduser().resolve()
+        if not root.is_dir():
+            continue
+        for p in root.rglob(filename):
+            if p.is_file():
+                return p.parent
+    return None
+
+
+@app.post("/api/v1/volumes/upload", response_model=list[VolumeMetadata])
+async def upload_volumes(files: list[UploadFile] = File(...)):
+    """Accept dragged NIfTI or DICOM files.
+
+    Single DICOM file: reads SeriesInstanceUID, finds the series folder in
+    source_directory, and loads the full series from disk.
+    Multiple files / folder drop: written to temp dir and discovered normally.
+    """
+    import asyncio
+    import tempfile, shutil
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="sigma_upload_"))
+    try:
+        written: list[Path] = []
+        for upload in files:
+            dest = tmp_dir / upload.filename
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            content = await upload.read()
+            dest.write_bytes(content)
+            written.append(dest)
+
+        # Single DICOM file → find its folder on disk by filename, then filter
+        # to only the files sharing the same SeriesInstanceUID.
+        if len(written) == 1:
+            uid = _dicom_series_uid(written[0])
+            if uid:
+                loop = asyncio.get_running_loop()
+                series_dir = await loop.run_in_executor(
+                    None, _find_series_dir_by_filename, written[0].name
+                )
+                if series_dir:
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+                    entries = await loop.run_in_executor(None, _discover_all, [str(series_dir)])
+                    entries = [e for e in entries if e.get("series_instance_uid") == uid]
+                    if entries:
+                        cat, _, _ = _register_entries(entries)
+                        _catalog.extend(cat)
+                        return cat
+
+        loop = asyncio.get_running_loop()
+        entries = await loop.run_in_executor(None, _discover_all, [str(tmp_dir)])
+        if not entries:
+            return []
+
+        cat, _, _ = _register_entries(entries)
+        _catalog.extend(cat)
+        return cat
+    except Exception as e:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 def _read_cache() -> dict:
