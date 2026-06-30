@@ -103,6 +103,7 @@ app.add_middleware(
         "X-Window-Width",
         "X-AI-Labels",
         "X-AI-Report",
+        "X-Label-Names",
         "Content-Disposition",
     ],
 )

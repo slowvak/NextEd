@@ -15,7 +15,7 @@ import { loadAppConfig, appConfig } from './configStore.js';
 import { openPreferencesModal } from './ui/preferencesModal.js';
 import { openHelpModal } from './ui/helpModal.js';
 import { showFolderPickerModal } from './ui/folderPickerModal.js';
-import { getTaskParams, loadVolumeByPath, loadMaskByPath, completeTask, buildTaskUI } from './taskMode.js';
+import { getTaskParams, loadVolumeByPath, loadMaskByPath, loadMaskFolderByPath, completeTask, buildTaskUI } from './taskMode.js';
 import { SyncBridge } from './multivolume/SyncBridge.js';
 import { showDimMismatchModal } from './multivolume/DimMismatchModal.js';
 import { uploadVolumes } from './api.js';
@@ -292,7 +292,6 @@ async function initTaskMode(taskParams) {
 
   const toolPanel = document.createElement('div');
   toolPanel.className = 'tool-panel';
-  toolPanel.style.display = 'none';
 
   const detailPanel = document.createElement('main');
   detailPanel.className = 'detail-panel viewer-mode';
@@ -324,32 +323,43 @@ async function initTaskMode(taskParams) {
     const state = new ViewerState({ dims, spacing, modality, windowCenter, windowWidth, dataMin, dataMax });
 
     // Load existing mask if specified
-    if (taskParams.mask) {
+    if (taskParams.masksFolder || taskParams.mask) {
       try {
-        const maskData = await loadMaskByPath(taskParams.mask, volumeId);
-        state.segVolume = maskData;
-        state.segDims = [...dims];
-
-        // Auto-detect labels from mask
-        const uniqueVals = new Set(maskData);
         const { buildColorLUT } = await import('./viewer/overlayBlender.js');
-        const DEFAULT_COLORS = [
-          null,
-          { r: 255, g: 0, b: 0 }, { r: 0, g: 255, b: 0 }, { r: 0, g: 0, b: 255 },
-          { r: 255, g: 255, b: 0 }, { r: 0, g: 255, b: 255 }, { r: 255, g: 0, b: 255 },
-        ];
-        for (const v of uniqueVals) {
-          if (v === 0) continue;
-          state.labels.set(v, {
-            name: `Label ${v}`,
-            value: v,
-            color: v < DEFAULT_COLORS.length ? DEFAULT_COLORS[v] : { r: 200, g: 200, b: 200 },
-            isVisible: true,
-          });
-        }
-        state.colorLUT = buildColorLUT(state.labels);
-        for (const [val] of state.labels) {
-          if (val !== 0) { state.activeLabel = val; break; }
+
+        if (taskParams.masksFolder) {
+          const { data: maskData, labels } = await loadMaskFolderByPath(taskParams.masksFolder, volumeId);
+          state.segVolume = maskData;
+          state.segDims = [...dims];
+          state.labels = labels;
+          state.colorLUT = buildColorLUT(state.labels);
+          for (const [val] of state.labels) {
+            if (val !== 0) { state.activeLabel = val; break; }
+          }
+        } else {
+          const maskData = await loadMaskByPath(taskParams.mask, volumeId);
+          state.segVolume = maskData;
+          state.segDims = [...dims];
+
+          const uniqueVals = new Set(maskData);
+          const DEFAULT_COLORS = [
+            null,
+            { r: 255, g: 0, b: 0 }, { r: 0, g: 255, b: 0 }, { r: 0, g: 0, b: 255 },
+            { r: 255, g: 255, b: 0 }, { r: 0, g: 255, b: 255 }, { r: 255, g: 0, b: 255 },
+          ];
+          for (const v of uniqueVals) {
+            if (v === 0) continue;
+            state.labels.set(v, {
+              name: `Label ${v}`,
+              value: v,
+              color: v < DEFAULT_COLORS.length ? DEFAULT_COLORS[v] : { r: 200, g: 200, b: 200 },
+              isVisible: true,
+            });
+          }
+          state.colorLUT = buildColorLUT(state.labels);
+          for (const [val] of state.labels) {
+            if (val !== 0) { state.activeLabel = val; break; }
+          }
         }
       } catch (e) {
         console.warn('[NextEd] Failed to load task mask:', e);
@@ -363,14 +373,10 @@ async function initTaskMode(taskParams) {
     state.volume = float32Volume;
     currentLayout.setVolume(float32Volume, dims, spacing);
 
-    // Set up tool panel (edit modes)
-    const isEditMode = taskParams.mode === 'edit' || taskParams.mode === 'edit+qc';
-    if (isEditMode) {
-      // Use a dummy sidebar element (hidden) since _setupToolPanel expects one
-      const dummySidebar = document.createElement('div');
-      _setupToolPanel(toolPanel, state, metadata, dummySidebar, detailPanel);
-      toolPanel.style.display = 'flex';
-    }
+    // Set up tool panel (always shown in task mode so labels are accessible)
+    const dummySidebar = document.createElement('div');
+    _setupToolPanel(toolPanel, state, metadata, dummySidebar, detailPanel);
+    toolPanel.style.display = 'flex';
 
     // Build task bar (prompt + QC controls + submit button)
     const onComplete = async () => {

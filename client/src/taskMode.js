@@ -25,8 +25,10 @@ export function getTaskParams() {
   return {
     volume,
     mask: params.get('mask'),
+    masksFolder: params.get('masks_folder'),
     output: params.get('output') || params.get('segmentation'),
     callback: params.get('callback'),
+    callbackAuth: params.get('callback_auth'),
     returnUrl: params.get('return_url'),
     prompt: params.get('prompt'),
     mode: params.get('mode') || 'edit',
@@ -62,6 +64,52 @@ export async function loadMaskByPath(maskPath, volumeId) {
   }
   const buffer = await resp.arrayBuffer();
   return new Uint8Array(buffer);
+}
+
+/**
+ * Load all .nii.gz masks in a folder merged into a single uint8 multi-label volume.
+ * Returns { data: Uint8Array, labels: Map<number, {name, value, color}> }.
+ */
+export async function loadMaskFolderByPath(folderPath, volumeId) {
+  const resp = await fetch(
+    `/api/v1/task/load-segmentation-folder?folder=${encodeURIComponent(folderPath)}&volume_id=${volumeId}`
+  );
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+    throw new Error(err.detail || 'Failed to load segmentation folder');
+  }
+  const buffer = await resp.arrayBuffer();
+  const data = new Uint8Array(buffer);
+
+  // Parse label names from header: "1=aorta,2=liver,..."
+  const labelHeader = resp.headers.get('X-Label-Names') || '';
+  const COLORS = [
+    null,
+    { r: 255, g: 80,  b: 80  },
+    { r: 80,  g: 255, b: 80  },
+    { r: 80,  g: 80,  b: 255 },
+    { r: 255, g: 255, b: 80  },
+    { r: 80,  g: 255, b: 255 },
+    { r: 255, g: 80,  b: 255 },
+    { r: 255, g: 160, b: 80  },
+    { r: 80,  g: 160, b: 255 },
+  ];
+  const labels = new Map();
+  labels.set(0, { name: 'Background', value: 0, color: null, isVisible: false });
+  for (const pair of labelHeader.split(',')) {
+    const eq = pair.indexOf('=');
+    if (eq < 0) continue;
+    const val = parseInt(pair.slice(0, eq), 10);
+    const name = pair.slice(eq + 1);
+    labels.set(val, {
+      name,
+      value: val,
+      color: COLORS[val % COLORS.length] ?? { r: 200, g: 200, b: 200 },
+      isVisible: true,
+    });
+  }
+
+  return { data, labels };
 }
 
 /**
@@ -101,6 +149,7 @@ export async function completeTask(taskParams, state, volumeId, startTime) {
     const payload = {
       volume_id: volumeId,
       callback_url: taskParams.callback,
+      callback_auth: taskParams.callbackAuth || null,
       output_mask_path: taskParams.output || null,
       decision: qcDecision,
       text: qcText,
@@ -148,7 +197,6 @@ export function buildTaskUI(taskParams, container, onComplete) {
     decision.innerHTML = `
       <option value="accept">Accept</option>
       <option value="reject">Reject</option>
-      <option value="revise">Needs Revision</option>
     `;
     qcControls.appendChild(decision);
 

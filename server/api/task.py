@@ -103,6 +103,57 @@ async def load_segmentation_by_path(path: str, volume_id: str):
     )
 
 
+@router.get("/load-segmentation-folder")
+async def load_segmentation_folder(folder: str, volume_id: str):
+    """Merge all .nii.gz files in a folder into a single uint8 multi-label volume.
+
+    Each file gets a unique integer label (1..N). Returns binary uint8 data with
+    X-Label-Names header (comma-separated label=name pairs) and X-Volume-Dimensions.
+
+    Query params:
+        folder: absolute path to directory containing per-structure .nii.gz files
+        volume_id: ID of the parent volume (for dimension reference)
+    """
+    folder_path = Path(folder).expanduser().resolve()
+    if not folder_path.exists() or not folder_path.is_dir():
+        raise HTTPException(status_code=404, detail=f"Folder not found: {folder}")
+
+    nii_files = sorted(folder_path.glob("*.nii.gz"))
+    if not nii_files:
+        raise HTTPException(status_code=404, detail=f"No .nii.gz files in folder: {folder}")
+
+    merged = None
+    dims = None
+    label_names = []
+
+    for label_idx, nii_path in enumerate(nii_files, start=1):
+        try:
+            data, metadata = load_nifti_segmentation(str(nii_path))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to load {nii_path.name}: {e}")
+
+        if merged is None:
+            dims = metadata["dimensions"]
+            merged = np.zeros(data.shape, dtype=np.uint8)
+
+        # data is binary (0/1) or uint8; mark non-zero voxels with this label
+        merged[data > 0] = label_idx
+        # Strip .nii.gz suffix for display name
+        name = nii_path.name.replace(".nii.gz", "").replace("_", " ")
+        label_names.append(f"{label_idx}={name}")
+
+    headers = {
+        "X-Volume-Dimensions": ",".join(str(d) for d in dims),
+        "X-Label-Names": ",".join(label_names),
+    }
+
+    return Response(
+        content=merged.tobytes(),
+        media_type="application/octet-stream",
+        headers=headers,
+    )
+
+
 @router.post("/complete")
 async def complete_task(request: Request):
     """Complete a workflow task — save mask to disk and POST result to callback.
@@ -125,15 +176,25 @@ async def complete_task(request: Request):
 
     volume_id = body.get("volume_id")
     callback_url = body.get("callback_url")
+    callback_auth = body.get("callback_auth")
     output_mask_path = body.get("output_mask_path")
-    decision = body.get("decision", "completed")
+    sigma_decision = body.get("decision", "completed")
     text = body.get("text", "")
+
+    # Map Sigma QC decisions to ewocs workflow decisions
+    DECISION_MAP = {
+        "accept": "OK",
+        "reject": "Cancel",
+        "revise": "Cancel",
+        "completed": "OK",
+    }
+    ewocs_decision = DECISION_MAP.get(sigma_decision, "OK")
 
     result_payload = {
         "status": "completed",
         "task_id": body.get("task_id"),
         "response": {
-            "decision": decision,
+            "decision": ewocs_decision,
             "text": text,
             "labels_modified": body.get("labels_modified", []),
             "time_spent_seconds": body.get("time_spent_seconds", 0),
@@ -152,12 +213,21 @@ async def complete_task(request: Request):
             result_payload["mask_path"] = None
             result_payload["mask_error"] = "Volume not loaded, mask not saved"
 
-    # POST to callback if provided
+    # POST to ewocs callback if provided, forwarding auth token
     if callback_url:
         try:
+            headers = {}
+            if callback_auth:
+                headers["Authorization"] = f"Bearer {callback_auth}"
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(callback_url, json=result_payload)
+                resp = await client.post(
+                    callback_url,
+                    json={"decision": ewocs_decision, "text": text},
+                    headers=headers,
+                )
                 result_payload["callback_status"] = resp.status_code
+                if not resp.is_success:
+                    result_payload["callback_error"] = resp.text
         except Exception as e:
             result_payload["callback_error"] = str(e)
 
