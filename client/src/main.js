@@ -15,7 +15,7 @@ import { loadAppConfig, appConfig } from './configStore.js';
 import { openPreferencesModal } from './ui/preferencesModal.js';
 import { openHelpModal } from './ui/helpModal.js';
 import { showFolderPickerModal } from './ui/folderPickerModal.js';
-import { getTaskParams, loadVolumeByPath, loadMaskByPath, loadMaskFolderByPath, completeTask, buildTaskUI } from './taskMode.js';
+import { getTaskParams, loadVolumeByPath, loadMaskByPath, loadMaskFolderByPath, loadMasksByFolder, completeTask, buildTaskUI } from './taskMode.js';
 import { SyncBridge } from './multivolume/SyncBridge.js';
 import { showDimMismatchModal } from './multivolume/DimMismatchModal.js';
 import { uploadVolumes } from './api.js';
@@ -363,6 +363,21 @@ async function initTaskMode(taskParams) {
         }
       } catch (e) {
         console.warn('[NextEd] Failed to load task mask:', e);
+      }
+    } else if (taskParams.masksFolder) {
+      try {
+        const { merged, apiLabels } = await loadMasksByFolder(taskParams.masksFolder, volumeId, dims);
+        state.segVolume = merged;
+        state.segDims = [...dims];
+        const { discoverLabels } = await import('./viewer/labelManager.js');
+        const { buildColorLUT } = await import('./viewer/overlayBlender.js');
+        state.labels = discoverLabels(merged, apiLabels);
+        state.colorLUT = buildColorLUT(state.labels);
+        for (const [val] of state.labels) {
+          if (val !== 0) { state.activeLabel = val; break; }
+        }
+      } catch (e) {
+        console.warn('[NextEd] Failed to load masks folder:', e);
       }
     }
 

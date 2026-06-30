@@ -54,6 +54,29 @@ export async function loadVolumeByPath(volumePath) {
  * Load segmentation mask by filesystem path.
  * Returns Uint8Array of segmentation data.
  */
+export async function loadMasksByFolder(masksFolder, volumeId, dims) {
+  const resp = await fetch(
+    `/api/v1/task/list-segmentation-folder?folder=${encodeURIComponent(masksFolder)}`
+  );
+  if (!resp.ok) throw new Error('Failed to list segmentation folder');
+  const fileList = await resp.json();
+
+  const totalVoxels = dims[0] * dims[1] * dims[2];
+  const merged = new Uint8Array(totalVoxels);
+  const apiLabels = [];
+  let labelValue = 1;
+
+  for (const file of fileList) {
+    const maskData = await loadMaskByPath(file.path, volumeId);
+    for (let i = 0; i < totalVoxels; i++) {
+      if (maskData[i] !== 0 && merged[i] === 0) merged[i] = labelValue;
+    }
+    apiLabels.push({ value: labelValue, name: file.name });
+    labelValue++;
+  }
+  return { merged, apiLabels };
+}
+
 export async function loadMaskByPath(maskPath, volumeId) {
   const resp = await fetch(
     `/api/v1/task/load-segmentation?path=${encodeURIComponent(maskPath)}&volume_id=${volumeId}`

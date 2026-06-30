@@ -289,6 +289,20 @@ async def complete_task(request: Request):
     return result_payload
 
 
+@router.get("/list-segmentation-folder")
+async def list_segmentation_folder(folder: str):
+    """List NIfTI files in a folder for multi-mask task mode."""
+    folder_path = Path(folder).expanduser().resolve()
+    if not folder_path.is_dir():
+        raise HTTPException(status_code=404, detail=f"Folder not found: {folder}")
+    nifti = [
+        f for f in folder_path.iterdir()
+        if f.name.endswith('.nii.gz') or (f.name.endswith('.nii') and not f.name.endswith('.nii.gz'))
+    ]
+    nifti.sort(key=lambda f: f.name)
+    return [{"name": f.name.replace('.nii.gz', '').replace('.nii', ''), "path": str(f)} for f in nifti]
+
+
 @router.post("/save-mask")
 async def save_task_mask(request: Request, volume_id: str, output_path: str):
     """Save segmentation mask to a specific filesystem path.
