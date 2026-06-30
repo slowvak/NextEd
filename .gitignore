@@ -35,3 +35,4 @@ config.json
 # Misc project artifacts
 server/test.log
 .gitnexus
+.claude/settings.local.json
