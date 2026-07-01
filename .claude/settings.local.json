@@ -100,7 +100,13 @@
       "Bash(sed -n '131,145p' /Users/bje/repos/Sigma/client/src/viewer/ViewerState.js)",
       "Bash(.venv/bin/python -c \"import server\")",
       "Bash(.venv/bin/python -c \"from server.api.multivolume import router; print\\('multivolume router OK'\\)\")",
-      "Bash(server/.venv/bin/python *)"
+      "Bash(server/.venv/bin/python *)",
+      "Bash(/usr/bin/git log *)",
+      "Bash(/usr/bin/git pull *)",
+      "Bash(/usr/bin/git checkout *)",
+      "Bash(/usr/bin/git add *)",
+      "Bash(/usr/bin/git commit *)",
+      "Bash(/usr/bin/git push *)"
     ]
   }
 }
