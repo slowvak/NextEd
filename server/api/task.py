@@ -7,8 +7,12 @@ catalog ID), and completing tasks with callback to an external system.
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import os
+import socket
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 import nibabel as nib
@@ -20,6 +24,56 @@ from server.catalog.models import VolumeMetadata, SegmentationMetadata
 from server.loaders.nifti_loader import load_nifti_volume, load_nifti_segmentation
 
 router = APIRouter(prefix="/api/v1/task", tags=["task"])
+
+
+def _allowed_roots() -> list[Path]:
+    raw = os.environ.get("SIGMA_DATA_ROOTS", "")
+    roots = [Path(p).expanduser().resolve() for p in raw.split(":") if p.strip()]
+    if not roots:
+        raise HTTPException(
+            status_code=500,
+            detail="SIGMA_DATA_ROOTS is not configured. Set it to a colon-separated list of allowed data directories.",
+        )
+    return roots
+
+
+def _resolve_within_roots(user_path: str) -> Path:
+    resolved = Path(user_path).expanduser().resolve()
+    roots = _allowed_roots()
+    for root in roots:
+        try:
+            resolved.relative_to(root)
+            return resolved
+        except ValueError:
+            continue
+    raise HTTPException(status_code=403, detail=f"Path outside allowed data roots: {user_path}")
+
+
+def _validate_callback_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="callback_url must be http(s)")
+    host = parsed.hostname
+    if not host:
+        raise HTTPException(status_code=400, detail="callback_url missing host")
+
+    allowed = os.environ.get("SIGMA_CALLBACK_HOSTS", "")
+    allowed_hosts = {h.strip().lower() for h in allowed.split(",") if h.strip()}
+    if host.lower() in allowed_hosts:
+        return
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        raise HTTPException(status_code=400, detail=f"callback_url host unresolvable: {e}")
+
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+            raise HTTPException(
+                status_code=403,
+                detail=f"callback_url resolves to non-routable address {ip}. Add {host} to SIGMA_CALLBACK_HOSTS to allow.",
+            )
 
 
 @router.get("/load-volume")
@@ -35,7 +89,7 @@ async def load_volume_by_path(path: str):
         register_volume, _ensure_loaded,
     )
 
-    filepath = Path(path).expanduser().resolve()
+    filepath = _resolve_within_roots(path)
     if not filepath.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
@@ -81,7 +135,7 @@ async def load_segmentation_by_path(path: str, volume_id: str):
         path: absolute path to segmentation NIfTI
         volume_id: ID of the parent volume (for dimension validation)
     """
-    filepath = Path(path).expanduser().resolve()
+    filepath = _resolve_within_roots(path)
     if not filepath.exists():
         raise HTTPException(status_code=404, detail=f"Segmentation not found: {path}")
 
@@ -114,7 +168,7 @@ async def load_segmentation_folder(folder: str, volume_id: str):
         folder: absolute path to directory containing per-structure .nii.gz files
         volume_id: ID of the parent volume (for dimension reference)
     """
-    folder_path = Path(folder).expanduser().resolve()
+    folder_path = _resolve_within_roots(folder)
     if not folder_path.exists() or not folder_path.is_dir():
         raise HTTPException(status_code=404, detail=f"Folder not found: {folder}")
 
@@ -215,6 +269,7 @@ async def complete_task(request: Request):
 
     # POST to ewocs callback if provided, forwarding auth token
     if callback_url:
+        _validate_callback_url(callback_url)
         try:
             headers = {}
             if callback_auth:
@@ -264,7 +319,7 @@ async def save_task_mask(request: Request, volume_id: str, output_path: str):
         img = nib.Nifti1Image(data_xyz.astype(np.uint8), affine)
         img.set_data_dtype(np.uint8)
 
-        out = Path(output_path).expanduser().resolve()
+        out = _resolve_within_roots(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         nib.save(img, str(out))
 
