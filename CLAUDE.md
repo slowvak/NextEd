@@ -19,28 +19,7 @@ A web-based medical image viewer and segmentation editor for researchers and rad
 <!-- GSD:stack-start source:research/STACK.md -->
 ## Technology Stack
 
-## Recommended Stack
-### Backend: Python Server
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Python | >=3.11 | Runtime | 3.11+ for performance gains (faster startup, cheaper exceptions). 3.12 fine too. | HIGH |
-| FastAPI | >=0.115 | HTTP API framework | Project requirement. Async by default, auto OpenAPI docs, excellent for streaming binary data. | HIGH |
-| uvicorn | >=0.30 | ASGI server | Standard production server for FastAPI. Use `--reload` in dev. | HIGH |
-| pydicom | >=2.4 | DICOM file I/O | The only serious Python DICOM library. Reads pixel data, tags, series grouping. | HIGH |
-| nibabel | >=5.2 | NIfTI file I/O | Standard Python NIfTI reader. Loads .nii and .nii.gz, exposes header metadata (affine, voxel spacing). | HIGH |
-| numpy | >=1.26 | Array operations | Backbone for all voxel data manipulation. Required by pydicom and nibabel anyway. | HIGH |
-| scikit-image | >=0.22 | Image processing algorithms | Otsu thresholding (`skimage.filters.threshold_otsu`), region growing, morphological ops. Mature, well-tested. | HIGH |
-| scipy | >=1.12 | Scientific computing | `scipy.ndimage` for connected-component labeling in region grow. Flood fill via `scipy.ndimage.label`. | HIGH |
-| python-multipart | >=0.0.9 | Form data parsing | Required by FastAPI for file upload endpoints (Save As). | HIGH |
-| highdicom | >=0.23 | DICOM-SEG writing | For saving segmentation as DICOM-SEG format. Only needed if DICOM-SEG export is implemented. | MEDIUM |
-| uv | latest | Package management | Project requirement (not pip). | HIGH |
-### Frontend: JavaScript Client
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Vanilla JS + HTML5 Canvas | ES2022+ | Core rendering | **No framework.** This is a pixel-pushing application, not a CRUD app. React/Vue add overhead and fight you on canvas. Direct DOM + Canvas 2D API gives full control over pixel rendering, compositing, and mouse events. | HIGH |
-| Vite | >=5.0 | Build tool / dev server | Fast HMR, ES module native, zero-config for vanilla JS. Proxy API requests to FastAPI in dev. | HIGH |
-| pako | >=2.1 | Gzip decompression | Decompress .nii.gz data client-side if serving raw compressed volumes. Small, fast, no dependencies. | MEDIUM |
-### Why NOT These Alternatives
+## Why NOT These Alternatives
 | Technology | Why Not |
 |------------|---------|
 | **React / Vue / Svelte** | This app is 90% canvas pixel manipulation. Frameworks add complexity for DOM management you barely need. The viewer panels, sliders, and tool panel are simple enough for vanilla JS. Frameworks fight canvas -- they want to own the DOM, but your rendering loop owns the canvas. |
@@ -52,25 +31,6 @@ A web-based medical image viewer and segmentation editor for researchers and rad
 | **Django** | Heavier than FastAPI, synchronous by default, ORM unnecessary for this file-based app. |
 | **Flask** | No async, no auto-docs, no streaming response helpers. FastAPI is strictly better here. |
 | **pip** | Project constraint: use uv. |
-## Architecture: Why Vanilla JS for the Client
-## Data Transfer Architecture
-### Volume Transfer: Server to Client
-### Slice Rendering: Client-Side
-## Client-Side File Organization
-## Server-Side File Organization
-## Installation
-# Server (using uv)
-# Client
-## Development Workflow
-# Terminal 1: Backend
-# Terminal 2: Frontend
-# vite.config.js proxies /api/* to localhost:8000
-## Key Version Notes
-## Sources
-- Training data knowledge of Python medical imaging ecosystem (pydicom, nibabel, scipy, scikit-image are the canonical libraries -- this has been stable for 5+ years)
-- Training data knowledge of FastAPI architecture patterns
-- Training data knowledge of Canvas 2D API for medical image rendering
-- No live sources were available (WebSearch/WebFetch denied); all version numbers need verification
 ## Alternatives Considered
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
@@ -84,81 +44,3 @@ A web-based medical image viewer and segmentation editor for researchers and rad
 | DICOM-SEG output | highdicom | pydicom raw | highdicom handles DICOM-SEG standard compliance correctly; doing it manually with pydicom is error-prone |
 | Package manager | uv | pip, poetry, pdm | Project requirement |
 <!-- GSD:stack-end -->
-
-<!-- GSD:conventions-start source:CONVENTIONS.md -->
-## Conventions
-
-Conventions not yet established. Will populate as patterns emerge during development.
-<!-- GSD:conventions-end -->
-
-<!-- GSD:architecture-start source:ARCHITECTURE.md -->
-## Architecture
-
-Architecture not yet mapped. Follow existing patterns found in the codebase.
-<!-- GSD:architecture-end -->
-
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
-
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
-
-Use these entry points:
-- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd:debug` for investigation and bug fixing
-- `/gsd:execute-phase` for planned phase work
-
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
-
-
-
-<!-- GSD:profile-start -->
-## Developer Profile
-
-> Profile not yet configured. Run `/gsd:profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
-<!-- GSD:profile-end -->
-
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
-
-This project is indexed by GitNexus as **Sigma** (2592 symbols, 4389 relationships, 142 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
-
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
-
-## Always Do
-
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
-
-## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/Sigma/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Sigma/clusters` | All functional areas |
-| `gitnexus://repo/Sigma/processes` | All execution flows |
-| `gitnexus://repo/Sigma/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
