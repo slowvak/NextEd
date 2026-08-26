@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import tempfile
 import uuid
 from pathlib import Path
@@ -15,6 +16,17 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import Response, StreamingResponse
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
+
+
+def _auth_headers() -> dict[str, str]:
+    """Credentials for SigmaServer's protected endpoints (predict, upload, delete)."""
+    key = os.environ.get("SIGMASERVER_API_KEY", "")
+    if not key:
+        raise HTTPException(
+            status_code=503,
+            detail="SIGMASERVER_API_KEY is not configured — start.sh sets it for both servers",
+        )
+    return {"X-API-Key": key}
 
 # In-memory job store: job_id -> job dict
 _jobs: dict[str, dict] = {}
@@ -239,7 +251,7 @@ async def _run_inference(job_id: str):
             poll_task = asyncio.create_task(_poll_sigmaserver_progress())
             try:
                 async with httpx.AsyncClient(timeout=600.0) as client:
-                    resp = await client.post(url, files=files, data=form_data)
+                    resp = await client.post(url, files=files, data=form_data, headers=_auth_headers())
             finally:
                 poll_task.cancel()
                 try:
@@ -492,8 +504,9 @@ async def upload_model(
         if description: data['description'] = description
         if arch: data['arch'] = arch
 
+        headers = _auth_headers()
         try:
-            resp = await client.post(f"{server_url}/models/upload", files=files, data=data)
+            resp = await client.post(f"{server_url}/models/upload", files=files, data=data, headers=headers)
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Could not reach AI server: {e}")
 
@@ -513,9 +526,10 @@ async def delete_model(model_id: str):
     if not server_url:
         raise HTTPException(status_code=400, detail="No AI server configured")
 
+    headers = _auth_headers()
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.delete(f"{server_url}/models/{model_id}")
+            resp = await client.delete(f"{server_url}/models/{model_id}", headers=headers)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach AI server: {e}")
 

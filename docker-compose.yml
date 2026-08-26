@@ -7,6 +7,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8050:8050"
+    environment:
+      # Shared with sigma-server below; set SIGMASERVER_API_KEY on the host.
+      SIGMASERVER_API_KEY: ${SIGMASERVER_API_KEY:?set SIGMASERVER_API_KEY (e.g. export SIGMASERVER_API_KEY=$(uuidgen))}
     volumes:
       # Mount model weights from the host. Each model lives at:
       #   ../SigmaServer/models/<model-id>/<weights-file>
@@ -32,6 +35,7 @@ services:
     environment:
       # Tells the entrypoint to point config.json at the AI container
       AI_SERVER_URL: "http://sigmaserver:8050"
+      SIGMASERVER_API_KEY: ${SIGMASERVER_API_KEY}
     depends_on:
       sigmaserver:
         condition: service_healthy

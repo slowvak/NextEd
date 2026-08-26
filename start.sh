@@ -46,6 +46,11 @@ log()  { printf "\033[1;34m[sigma]\033[0m %s\n" "$*"; }
 ok()   { printf "\033[1;32m[sigma]\033[0m %s\n" "$*"; }
 warn() { printf "\033[1;33m[sigma]\033[0m %s\n" "$*"; }
 
+# ── Shared API key ────────────────────────────────────────────────────────────
+# SigmaServer's /predict, /models/upload and DELETE /models/{id} require
+# X-API-Key. Both servers inherit this; set it yourself to pin a stable value.
+export SIGMASERVER_API_KEY="${SIGMASERVER_API_KEY:-$(uuidgen)}"
+
 # ── Kill existing processes ───────────────────────────────────────────────────
 
 log "Stopping any existing SIGMA processes…"
