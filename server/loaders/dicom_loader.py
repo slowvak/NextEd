@@ -251,6 +251,20 @@ def load_dicom_series(file_paths: list[str]) -> tuple[np.ndarray, dict]:
     # Sort slices by their physical projection along the slice normal
     slices.sort(key=get_slice_pos)
 
+    # ponytail: drop duplicate slice locations — folders often hold a second copy
+    # of the same series (e.g. a "selected/" subfolder), and duplicates collapse
+    # slice spacing to 0, which makes the affine undecomposable.
+    unique, seen = [], set()
+    for s in slices:
+        key = round(get_slice_pos(s), 4)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(s)
+    if len(unique) != len(slices):
+        print(f"[dicom_loader] dropped {len(slices) - len(unique)} duplicate slice location(s)")
+        slices = unique
+
     # Re-extract geometry from the true first slice
     first = slices[0]
     position = [float(v) for v in first.ImagePositionPatient]
