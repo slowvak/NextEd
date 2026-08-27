@@ -1,0 +1,12 @@
+# Dockerfile.server runs `uv sync` to build /app/server/.venv, then does
+# `COPY server/ server/`. Without this, the host's macOS .venv is copied over
+# the one uv just built and its bin/python becomes a symlink into
+# /Users/.../uv/python/cpython-*-macos-aarch64 — which does not exist in the
+# image, so the container dies with "exec: server/.venv/bin/python: not found".
+**/.venv
+**/node_modules
+**/__pycache__
+.git
+*.log
+data/
+models/
