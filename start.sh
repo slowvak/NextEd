@@ -49,7 +49,11 @@ warn() { printf "\033[1;33m[sigma]\033[0m %s\n" "$*"; }
 # ── Shared API key ────────────────────────────────────────────────────────────
 # SigmaServer's /predict, /models/upload and DELETE /models/{id} require
 # X-API-Key. Both servers inherit this; set it yourself to pin a stable value.
-export SIGMASERVER_API_KEY="${SIGMASERVER_API_KEY:-$(uuidgen)}"
+# uuidgen ships in util-linux, which minimal Ubuntu images omit — and an empty
+# key here silently disables the auth it is supposed to enforce, so generate
+# from /dev/urandom (always present) and refuse to start without one.
+export SIGMASERVER_API_KEY="${SIGMASERVER_API_KEY:-$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')}"
+[[ -n "$SIGMASERVER_API_KEY" ]] || { echo "[sigma] could not generate SIGMASERVER_API_KEY" >&2; exit 1; }
 
 # ── Kill existing processes ───────────────────────────────────────────────────
 
