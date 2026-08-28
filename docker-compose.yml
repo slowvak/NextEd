@@ -30,12 +30,25 @@ services:
     ports:
       - "8060:8060"
     volumes:
-      # Medical image data directory — set DATA_DIR on the host or edit this path
-      - ${DATA_DIR:-./data}:/data
+      # Mirrored at its own absolute host path, not remapped to /data. The UI's
+      # "Select Image Folder" saves whatever path you type straight into
+      # config.source_directory and the server then opens it directly, so a
+      # container-only /data path can't satisfy a host path like
+      # /Users/you/Desktop/DICOM. Same convention as the ewocs5 backend mounts.
+      - ${DATA_DIR:-${HOME}/Desktop}:${DATA_DIR:-${HOME}/Desktop}
+      # config.json must live outside the image: the UI writes source_directory
+      # through PUT /api/v1/config, and baked into the image that choice is lost
+      # on every restart (and a stale build-time path wins until the next
+      # rebuild). The entrypoint's ai.server patch lands in this file too.
+      - ./config.json:/app/config.json
     environment:
       # Tells the entrypoint to point config.json at the AI container
       AI_SERVER_URL: "http://sigmaserver:8050"
       SIGMASERVER_API_KEY: ${SIGMASERVER_API_KEY}
+      # Confines /api/v1/config/list-dir to the directory mounted above — the
+      # picker walks server-side now, so without this it could list the whole
+      # container filesystem.
+      BROWSE_ROOT: ${DATA_DIR:-${HOME}/Desktop}
     depends_on:
       sigmaserver:
         condition: service_healthy

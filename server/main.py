@@ -461,7 +461,10 @@ def _discover_all(paths: list[str]) -> list[dict]:
     return unique
 
 
-_CACHE_SCHEMA_VERSION = "v3"  # bump when VolumeMetadata fields are added
+# v4: Enhanced (multi-frame) DICOM support — one file can now yield many
+# slices, so cached entries from v3 undercount those series. The mtime
+# freshness check can't see a loader change; only this bump invalidates it.
+_CACHE_SCHEMA_VERSION = "v4"  # bump when VolumeMetadata fields are added
 
 
 def _compute_cache_key(entries: list[dict]) -> str:

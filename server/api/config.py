@@ -1,7 +1,7 @@
 # Copyright Bradley J Erickson, 2026.
 from fastapi import APIRouter, HTTPException, Request
 import json
-import asyncio
+import os
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, List, Any
@@ -70,82 +70,42 @@ async def update_config(request: Request):
     return {"status": "success"}
 
 
-def _open_native_folder_dialog() -> str:
-    """Open a native OS folder picker dialog (blocking). Returns POSIX path or ''.
+# The old /browse-folder endpoint shelled out to osascript (and fell back to
+# tkinter) to pop a native folder dialog. That only ever worked while this
+# server ran as a host process on the user's own Mac; containerized there is no
+# osascript, no display and no tkinter, so it returned "" and the UI's Browse
+# button did nothing. A server-side listing works in both cases and over a
+# network besides.
 
-    Strategy (macOS):
-      osascript — single call that returns a POSIX path directly.
-    Fallback:
-      tkinter — for Linux / Windows or if osascript is unavailable.
+# Browsing is confined to this root. The compose file sets it to the same host
+# directory it mounts; the default keeps a bare `python main.py` run usable.
+_BROWSE_ROOT = Path(os.getenv("BROWSE_ROOT", str(Path.home()))).resolve()
+
+
+@router.get("/list-dir")
+async def list_dir(path: str | None = None):
+    """List the subdirectories of `path`, for the folder picker.
+
+    `path` arrives straight from the browser, so it is resolved and then
+    required to sit inside _BROWSE_ROOT — otherwise any caller could walk the
+    whole filesystem. Symlinks resolve before the check, so one pointing out of
+    the root is rejected too.
     """
-    import sys
-    import subprocess
-    import os
-
-    # ── macOS: osascript (primary) ────────────────────────────────────────────
-    if sys.platform == "darwin":
-        try:
-            # activate SystemUIServer to bring the dialog to front without
-            # requiring Automation permission for System Events / Finder
-            script = (
-                'tell application "SystemUIServer" to activate\n'
-                'POSIX path of (choose folder with prompt "Select Image Folder")'
-            )
-            env = os.environ.copy()
-            result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True, text=True, timeout=120, env=env
-            )
-            if result.returncode == 0:
-                path = result.stdout.strip().rstrip("/")
-                if path:
-                    print(f"[browse-folder] osascript selected: {path}")
-                    return path
-            else:
-                err = result.stderr.strip()
-                if "User canceled" not in err and "(-128)" not in err:
-                    print(f"[browse-folder] osascript error: {err}")
-                    # Retry without the activate line (some sandboxed envs block it)
-                    result2 = subprocess.run(
-                        ["osascript", "-e",
-                         'POSIX path of (choose folder with prompt "Select Image Folder")'],
-                        capture_output=True, text=True, timeout=120, env=env
-                    )
-                    if result2.returncode == 0:
-                        path = result2.stdout.strip().rstrip("/")
-                        if path:
-                            print(f"[browse-folder] osascript (bare) selected: {path}")
-                            return path
-        except Exception as exc:
-            print(f"[browse-folder] osascript failed: {exc}")
-
-    # ── tkinter (fallback / non-macOS) ───────────────────────────────────────
+    target = Path(path).resolve() if path else _BROWSE_ROOT
+    if target != _BROWSE_ROOT and _BROWSE_ROOT not in target.parents:
+        raise HTTPException(status_code=403, detail=f"Path is outside {_BROWSE_ROOT}")
+    if not target.is_dir():
+        raise HTTPException(status_code=404, detail="Not a directory")
     try:
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk()
-        root.withdraw()
-        root.lift()
-        root.attributes("-topmost", True)
-        folder = filedialog.askdirectory(title="Select Image Folder")
-        root.destroy()
-        if folder:
-            print(f"[browse-folder] tkinter selected: {folder}")
-        return folder or ""
-    except Exception as exc:
-        print(f"[browse-folder] tkinter failed: {exc}")
-
-    return ""
-
-
-@router.post("/browse-folder")
-async def browse_folder():
-    """Open a native OS folder picker and return the selected path.
-
-    Runs the blocking dialog in a thread-pool executor so the async event loop
-    stays responsive while the user interacts with the dialog.
-    """
-    loop = asyncio.get_running_loop()
-    folder = await loop.run_in_executor(None, _open_native_folder_dialog)
-    return {"path": folder}
-
+        dirs = sorted(
+            (p.name for p in target.iterdir() if p.is_dir() and not p.name.startswith(".")),
+            key=str.lower,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    return {
+        "path": str(target),
+        "parent": str(target.parent) if target != _BROWSE_ROOT else None,
+        "root": str(_BROWSE_ROOT),
+        "dirs": dirs,
+    }

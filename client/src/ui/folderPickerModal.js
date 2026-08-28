@@ -5,6 +5,84 @@
  * Returns a Promise that resolves to the chosen folder path (string) when the
  * user confirms, or null if they dismiss with no selection.
  */
+// Server-side directory browser, shared by the folder picker modal and the
+// save-NIfTI dialog. The server used to pop a native osascript folder dialog on
+// its own machine; containerized there is no osascript, no display and no
+// tkinter, so that button did nothing. Listing over the API works in both cases
+// and over a network besides.
+//
+// Writes the current directory into `pathInput` as you navigate and reports
+// problems through `statusLine`. Returns the list element to insert, plus a
+// toggle to wire to a Browse button.
+export function createFolderBrowser(pathInput, statusLine) {
+  const element = document.createElement('div');
+  element.style.cssText = [
+    'display:none', 'margin-top:10px', 'max-height:240px', 'overflow-y:auto',
+    'background:#0d1017', 'border:1px solid rgba(99,130,255,0.3)',
+    'border-radius:8px', 'font-family:ui-monospace,monospace',
+    'font-size:0.82rem',
+  ].join(';');
+
+  const rowStyle = [
+    'padding:0.4rem 0.7rem', 'cursor:pointer', 'color:#c9d1ea',
+    'border-bottom:1px solid rgba(99,130,255,0.08)',
+    'white-space:nowrap', 'overflow:hidden', 'text-overflow:ellipsis',
+  ].join(';');
+
+  const makeRow = (label, onClick) => {
+    const row = document.createElement('div');
+    row.textContent = label;
+    row.style.cssText = rowStyle;
+    row.addEventListener('mouseenter', () => { row.style.background = 'rgba(99,130,255,0.14)'; });
+    row.addEventListener('mouseleave', () => { row.style.background = 'none'; });
+    row.addEventListener('click', onClick);
+    return row;
+  };
+
+  const setStatus = (text) => { if (statusLine) statusLine.textContent = text; };
+
+  async function loadDir(path) {
+    setStatus('Loading…');
+    try {
+      const url = '/api/v1/config/list-dir' + (path ? `?path=${encodeURIComponent(path)}` : '');
+      const res = await fetch(url);
+      if (!res.ok) {
+        const { detail } = await res.json().catch(() => ({}));
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const { path: here, parent, dirs } = await res.json();
+      pathInput.value = here;
+      element.replaceChildren();
+      if (parent) element.appendChild(makeRow('📁 ..', () => loadDir(parent)));
+      for (const name of dirs) {
+        element.appendChild(makeRow(`📁 ${name}`, () => loadDir(`${here.replace(/\/$/, '')}/${name}`)));
+      }
+      if (!dirs.length && !parent) {
+        const empty = document.createElement('div');
+        empty.textContent = 'No subfolders here.';
+        empty.style.cssText = 'padding:0.4rem 0.7rem;color:#5a6080;';
+        element.appendChild(empty);
+      }
+      element.style.display = 'block';
+      setStatus('Navigate to a folder, then confirm.');
+    } catch (err) {
+      setStatus(`Could not list directory: ${err.message}`);
+      console.warn('[FolderBrowser] list-dir error:', err);
+    }
+  }
+
+  const toggle = () => {
+    if (element.style.display === 'block') {
+      element.style.display = 'none';
+      setStatus('');
+      return;
+    }
+    loadDir(pathInput.value.trim() || undefined);
+  };
+
+  return { element, toggle, loadDir };
+}
+
 export function showFolderPickerModal() {
   return new Promise((resolve) => {
     // Overlay
@@ -107,37 +185,18 @@ export function showFolderPickerModal() {
       browseBtn.style.color = '#a0b0ff';
     });
 
-    // Status text shown while the native dialog is open
+    // Status / error line
     const statusLine = document.createElement('div');
     statusLine.style.cssText = 'font-size:0.78rem;color:#5a6080;margin-top:4px;min-height:1.1em;';
 
-    browseBtn.addEventListener('click', async () => {
-      browseBtn.disabled = true;
-      browseBtn.textContent = 'Opening…';
-      statusLine.textContent = 'Waiting for native folder dialog…';
-      try {
-        const res = await fetch('/api/v1/config/browse-folder', { method: 'POST' });
-        if (!res.ok) throw new Error('Server error');
-        const { path } = await res.json();
-        if (path) {
-          pathInput.value = path;
-          statusLine.textContent = '';
-        } else {
-          statusLine.textContent = 'No folder selected.';
-        }
-      } catch (err) {
-        statusLine.textContent = 'Could not open native dialog — type the path manually.';
-        console.warn('[FolderPicker] browse-folder error:', err);
-      } finally {
-        browseBtn.disabled = false;
-        browseBtn.textContent = 'Browse…';
-      }
-    });
+    const { element: browser, toggle } = createFolderBrowser(pathInput, statusLine);
+    browseBtn.addEventListener('click', toggle);
 
     inputRow.appendChild(pathInput);
     inputRow.appendChild(browseBtn);
     card.appendChild(inputRow);
     card.appendChild(statusLine);
+    card.appendChild(browser);
 
     // Action buttons
     const actions = document.createElement('div');

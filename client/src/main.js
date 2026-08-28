@@ -14,7 +14,7 @@ import { refineContourAxial, fillHolesOnSlice } from './viewer/contourRefiner.js
 import { loadAppConfig, appConfig } from './configStore.js';
 import { openPreferencesModal } from './ui/preferencesModal.js';
 import { openHelpModal } from './ui/helpModal.js';
-import { showFolderPickerModal } from './ui/folderPickerModal.js';
+import { showFolderPickerModal, createFolderBrowser } from './ui/folderPickerModal.js';
 import { getTaskParams, loadVolumeByPath, loadMaskByPath, loadMaskFolderByPath, loadMasksByFolder, completeTask, buildTaskUI } from './taskMode.js';
 import { SyncBridge } from './multivolume/SyncBridge.js';
 import { showDimMismatchModal } from './multivolume/DimMismatchModal.js';
@@ -2197,22 +2197,17 @@ async function _promptSaveNifti(state, metadata) {
     browseBtn.textContent = 'Browse…';
     browseBtn.className = 'btn';
     browseBtn.type = 'button';
-    browseBtn.onclick = async () => {
-      browseBtn.disabled = true;
-      try {
-        const res = await fetch('/api/v1/config/browse-folder', { method: 'POST' });
-        if (res.ok) {
-          const { path } = await res.json();
-          if (path) folderInput.value = path;
-        }
-      } finally {
-        browseBtn.disabled = false;
-      }
-    };
+    const folderStatus = document.createElement('div');
+    folderStatus.style.cssText = 'font-size:12px;color:#888;margin-bottom:6px;min-height:1.1em;';
+    const { element: folderBrowser, toggle: toggleFolderBrowser } =
+      createFolderBrowser(folderInput, folderStatus);
+    browseBtn.onclick = toggleFolderBrowser;
 
     folderRow.appendChild(folderInput);
     folderRow.appendChild(browseBtn);
     card.appendChild(folderRow);
+    card.appendChild(folderStatus);
+    card.appendChild(folderBrowser);
 
     // Filename row
     const nameInput = document.createElement('input');
