@@ -36,3 +36,4 @@ config.json
 server/test.log
 .gitnexus
 .claude/settings.local.json
+.env
