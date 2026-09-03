@@ -106,7 +106,16 @@
       "Bash(/usr/bin/git checkout *)",
       "Bash(/usr/bin/git add *)",
       "Bash(/usr/bin/git commit *)",
-      "Bash(/usr/bin/git push *)"
+      "Bash(/usr/bin/git push *)",
+      "Bash(UV_NATIVE_TLS=1 uv sync)",
+      "Bash(security find-certificate *)",
+      "Bash(SSL_CERT_FILE=/tmp/system-certs.pem uv sync)",
+      "Bash(uv --version)",
+      "Bash(uv self *)",
+      "Bash(SSL_CERT_FILE=/Users/bje/Documents/corp-cert.pem uv sync)",
+      "Bash(/Users/bje/repos/ewocs-platform/Sigma/server/.venv/bin/python -c \"import fastapi, uvicorn, nibabel; print\\('core imports ok'\\)\")",
+      "Skill(run)",
+      "Bash(bash start.sh)"
     ]
   }
 }
