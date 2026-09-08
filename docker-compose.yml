@@ -6,7 +6,8 @@ services:
       context: ../SigmaServer
       dockerfile: Dockerfile
     ports:
-      - "8050:8050"
+      # Loopback only: the AI server accepts full NIfTI volumes.
+      - "127.0.0.1:8050:8050"
     environment:
       # Shared with sigma-server below; set SIGMASERVER_API_KEY on the host.
       SIGMASERVER_API_KEY: ${SIGMASERVER_API_KEY:?set SIGMASERVER_API_KEY (e.g. export SIGMASERVER_API_KEY=$(uuidgen))}
@@ -28,7 +29,9 @@ services:
       context: .
       dockerfile: Dockerfile.server
     ports:
-      - "8060:8060"
+      # Loopback only. This server hands out complete DICOM studies via
+      # /api/v1/wado-rs; it must not be reachable from the network.
+      - "127.0.0.1:8060:8060"
     volumes:
       # Mirrored at its own absolute host path, not remapped to /data. The UI's
       # "Select Image Folder" saves whatever path you type straight into
@@ -45,6 +48,12 @@ services:
       # Tells the entrypoint to point config.json at the AI container
       AI_SERVER_URL: "http://sigmaserver:8050"
       SIGMASERVER_API_KEY: ${SIGMASERVER_API_KEY}
+      # Verifies the ewocs5 handoff token before serving any study. start.sh
+      # mirrors this from ewocs5/.env so the two cannot drift apart.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (start.sh mirrors it from ewocs5/.env)}
+      # Inside a container uvicorn must bind all interfaces or the port mapping
+      # above cannot reach it. Exposure is constrained by that mapping, not here.
+      SIGMA_BIND_HOST: "0.0.0.0"
       # Confines /api/v1/config/list-dir to the directory mounted above — the
       # picker walks server-side now, so without this it could list the whole
       # container filesystem.
@@ -60,7 +69,7 @@ services:
       context: .
       dockerfile: Dockerfile.client
     ports:
-      - "5275:80"
+      - "127.0.0.1:5275:80"
     depends_on:
       - sigma-server
     restart: unless-stopped

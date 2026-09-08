@@ -4,6 +4,28 @@
 
 ---
 
+## Security
+
+ΣIGMA serves medical images, including complete DICOM studies with patient
+identifiers intact. As of this release it is **secure by default**:
+
+- **The API requires a bearer token.** Every `/api/v1` route is gated. Tokens are
+  HS256, verified against `JWT_SECRET`, and must carry `typ: "sigma-handoff"`.
+  The viewer reads its token from the URL *fragment* (`#token=…`), which browsers
+  never transmit to a server, so it cannot appear in an access log.
+- **The server binds to loopback** (`127.0.0.1`). Override with `SIGMA_BIND_HOST`
+  only when you understand the consequences — this process hands out studies.
+- **CORS is restricted** to `http://localhost:5275` and `http://localhost:5173`.
+  Override with `SIGMA_CORS_ORIGINS`.
+
+For local development against non-patient data, set `SIGMA_AUTH_DISABLED=1` to
+bypass the token check. **Never set it anywhere real patient data is reachable.**
+The server prints a warning at startup when it is set.
+
+> **Not a medical device.** ΣIGMA is research software. It is not cleared or
+> approved by any regulator for clinical diagnosis or treatment decisions.
+
+
 ## Features
 
 - **Folder-based catalog** — point ΣIGMA at a folder and it discovers all volumes automatically (each volume typically maps to a CT or MRI series); relative path and DICOM series date/time are shown alongside each entry

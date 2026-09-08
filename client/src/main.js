@@ -1,5 +1,9 @@
 // Copyright Bradley J Erickson, 2026.
 import './styles.css';
+// Must run before any module issues a fetch: installs the Authorization wrapper
+// and clears the handoff token out of the URL fragment.
+import { initAuth } from './auth.js';
+initAuth();
 import { showSplashIfNeeded } from './ui/splashScreen.js';
 import { createAppShell } from './ui/appShell.js';
 import { renderVolumeList, addVolumeToList, removeVolumeFromList, setOpenLinkedWindowCallback } from './ui/volumeList.js';

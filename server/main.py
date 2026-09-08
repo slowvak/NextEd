@@ -10,6 +10,7 @@ directory to scan recursively for volumes.
 
 import hashlib
 import json
+import os
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -22,7 +23,10 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import uvicorn
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
+
+from server import auth as auth_module
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.api.volumes import router as volumes_router, register_volume
@@ -91,11 +95,66 @@ async def lifespan(app_instance: FastAPI):
 
 app = FastAPI(title="SIGMA Image Server", lifespan=lifespan)
 
+
+# --- Authentication gate -----------------------------------------------------
+# Everything under /api/v1 serves PHI: raw pixel data (volumes), complete DICOM
+# studies with headers intact (wado-rs), and on-disk paths whose folder names
+# routinely carry MRN or accession (task, config). All of it was open.
+#
+# ponytail: one middleware rather than a dependency on each router, because six
+# endpoints are declared directly on `app` (volumes, upload, labels, debug) and
+# would not be covered by router dependencies — nor would the next one someone
+# adds. This gate has no such gap.
+_AUTH_EXEMPT_PREFIXES = (
+    "/health",
+    "/api/v1/health",
+    "/docs",
+    "/openapi.json",
+    # WebSockets cannot send an Authorization header; ws carries viewer state,
+    # not pixel data. Closed when the ATNA identity work lands (plan A.5).
+    "/ws",
+)
+
+
+@app.middleware("http")
+async def require_auth(request: Request, call_next):
+    path = request.url.path
+
+    if request.method == "OPTIONS" or not path.startswith("/api/v1"):
+        return await call_next(request)
+    if path.startswith(_AUTH_EXEMPT_PREFIXES):
+        return await call_next(request)
+    if auth_module.AUTH_DISABLED:
+        return await call_next(request)
+
+    header = request.headers.get("authorization", "")
+    if not header.startswith("Bearer "):
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    try:
+        request.state.claims = auth_module.verify_token(header[len("Bearer "):].strip())
+    except ValueError as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=401)
+
+    return await call_next(request)
+
+
+# Registered after the auth gate so it wraps it: a 401 then still carries the
+# CORS headers, which is the difference between a clear error and an opaque
+# "CORS failure" in the browser console.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Was ["*"]. An open policy on a PHI server lets any page a reviewer visits
+    # read studies with the reviewer's credentials. Override with SIGMA_CORS_ORIGINS.
+    allow_origins=[
+        o.strip() for o in os.getenv(
+            "SIGMA_CORS_ORIGINS",
+            "http://localhost:5275,http://localhost:5173",
+        ).split(",") if o.strip()
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
     expose_headers=[
         "X-Volume-Dimensions",
         "X-Voxel-Spacing",
@@ -112,8 +171,13 @@ app.include_router(volumes_router)
 app.include_router(segmentations_router)
 app.include_router(ai_router)
 app.include_router(task_router)
-app.include_router(ws_router)
 app.include_router(wado_router)
+
+# ponytail: the WebSocket router is left open because a browser WebSocket
+# cannot send an Authorization header, so it needs a token in the subprotocol
+# or a first-message handshake instead. It broadcasts viewer state, not pixel
+# data. Tracked with A.5 — close it when the ATNA identity work lands.
+app.include_router(ws_router)
 
 from server.api.config import router as config_router
 app.include_router(config_router)
@@ -759,9 +823,16 @@ def main():
     # Scan runs in lifespan (background thread) so server starts accepting requests immediately
     app.state._scan_paths = paths
 
-    print(f"\nStarting server on http://localhost:8060")
+    # Loopback by default: this server hands out complete studies. Binding
+    # 0.0.0.0 exposed them to the whole network. Override deliberately.
+    host = os.getenv("SIGMA_BIND_HOST", "127.0.0.1")
+    print(f"\nStarting server on http://{host}:8060")
+    if auth_module.AUTH_DISABLED:
+        print("*** WARNING: SIGMA_AUTH_DISABLED is set — PHI endpoints are UNAUTHENTICATED ***")
+    if host != "127.0.0.1":
+        print(f"*** WARNING: bound to {host}, not loopback — studies are reachable off-host ***")
     print("Volume data will be loaded on demand when opened in the viewer.")
-    uvicorn.run(app, host="0.0.0.0", port=8060)
+    uvicorn.run(app, host=host, port=8060)
 
 
 if __name__ == "__main__":

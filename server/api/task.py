@@ -230,7 +230,14 @@ async def complete_task(request: Request):
 
     volume_id = body.get("volume_id")
     callback_url = body.get("callback_url")
-    callback_auth = body.get("callback_auth")
+
+    # Forward the token this request was authenticated with, NOT one supplied in
+    # the body. Taking it from the body let any caller make SIGMA replay an
+    # arbitrary bearer credential against an ewocs5 URL of their choosing.
+    claims = getattr(request.state, "claims", None)
+    callback_auth = None
+    if claims is not None:
+        callback_auth = request.headers.get("authorization", "")[len("Bearer "):].strip() or None
     output_mask_path = body.get("output_mask_path")
     sigma_decision = body.get("decision", "completed")
     text = body.get("text", "")

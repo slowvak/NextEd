@@ -28,7 +28,6 @@ export function getTaskParams() {
     masksFolder: params.get('masks_folder'),
     output: params.get('output') || params.get('segmentation'),
     callback: params.get('callback'),
-    callbackAuth: params.get('callback_auth'),
     returnUrl: params.get('return_url'),
     prompt: params.get('prompt'),
     mode: params.get('mode') || 'edit',
@@ -172,7 +171,8 @@ export async function completeTask(taskParams, state, volumeId, startTime) {
     const payload = {
       volume_id: volumeId,
       callback_url: taskParams.callback,
-      callback_auth: taskParams.callbackAuth || null,
+      // No callback_auth: the server forwards the token this request was
+      // authenticated with. Sending one here let a caller pick the credential.
       output_mask_path: taskParams.output || null,
       decision: qcDecision,
       text: qcText,
